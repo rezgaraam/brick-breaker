@@ -17,7 +17,7 @@ struct StatsView: View {
             List {
                 Section {
                     LabeledContent("Levels cleared", value: results.count, format: .number)
-                    LabeledContent("Stars", value: "\(totalStars) / 300")
+                    LabeledContent("Stars") { Text("\(totalStars) of 300") }
                     LabeledContent("Best score", value: results.map(\.bestScore).max() ?? 0, format: .number)
                 }
                 Section {
@@ -62,7 +62,7 @@ private struct LevelRow: View {
 
     var body: some View {
         LabeledContent("Level \(result.level + 1)") {
-            HStack(spacing: 12) {
+            HStack {
                 Text(String(repeating: "★", count: result.stars) + String(repeating: "☆", count: 3 - result.stars))
                     .foregroundStyle(.yellow)
                 Text(result.bestScore, format: .number)

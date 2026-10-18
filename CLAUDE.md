@@ -99,6 +99,8 @@ phone with the team. Release steps are in `PLAN-ios.md`.
   and handles **every** touching cell (an early return after the first one let balls sink through steel when a
   brick was touched in the same substep, especially with the fireball). `hit()` returns a contact normal only
   when the ball is moving *into* the rect; a centre inside a rect reverses the dominant axis (safety net).
+  Faces shared with a solid neighbour (walls are stacks of 5px cells with 1px seams) are internal and never used as
+  a bounce surface; the other axis is used, or the ball is sent back if both are internal (test.js section 10).
   `bounce()` sets the sign of a velocity component rather than negating it, so a second overlap on the next
   substep is a no-op instead of a double bounce. test.js section 9 hammers the walls with 20 balls, fireball
   on and off, and fails if any ball centre enters steel or gets past a side wall.
@@ -141,7 +143,9 @@ Progress screen uses `ios/BrickBreaker/Localizable.xcstrings` (same five languag
 
 Everything a player taps outside the playfield is real HTML, never canvas-drawn: the level select (`goMenu()`
 renders 100 `<button>`s with labels like "Level 4, 2 of 3 stars" / "locked"; the next one to play gets class
-`next`), the icon chips (mute with `aria-pressed`, settings, Progress in the iOS app, pause), the settings rows
+`next`), the icon chips (mute with `aria-pressed`, settings, Progress in the iOS app; menu only, since in play the thumbs
+are at the bottom), the pause button (top-left in the HUD, 44px hit area), the menu's "Play level N" button and
+star total, the title (an SVG drawn from bricks via `LOGO`, real text in a visually hidden span), the settings rows
 (44px `role=switch` buttons), the HUD (score, level, lives as `role=img` "3 lives") and the pause/win/over
 cards. Sizes use `cqw` so they track the canvas scale. Game
 events are announced through the `say()` aria-live region. The playfield is a canvas; **Assisted play**

@@ -1,6 +1,9 @@
 import BrickBreakerCore
+import OSLog
 import SwiftData
 import SwiftUI
+
+private let log = Logger(subsystem: "com.rezgaraam.BrickBreaker", category: "progress")
 
 struct ContentView: View {
     @Environment(\.modelContext) private var context
@@ -12,13 +15,14 @@ struct ContentView: View {
         GameView(reloadToken: reloadToken, seed: { (try? ProgressStore(context: context).seedScript()) ?? "" }) { message in
             switch message {
             case let .levelDone(level, stars, score):
-                try? ProgressStore(context: context).record(level: level, stars: stars, score: score)
+                do { try ProgressStore(context: context).record(level: level, stars: stars, score: score) }
+                catch { log.error("could not save level \(level): \(error)") } // the page keeps its own copy until next launch
             case .haptic:
                 hapticTick &+= 1
             case .stats:
                 showStats = true
             case .reset:
-                try? ProgressStore(context: context).reset()
+                do { try ProgressStore(context: context).reset() } catch { log.error("could not reset progress: \(error)") }
                 reloadToken += 1
             }
         }

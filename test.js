@@ -9,7 +9,7 @@ const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,set
 const g={document:{documentElement:{},addEventListener:noop,body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop,focus:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
 g.window=g;g.setTimeout=setTimeout;g.clearTimeout=clearTimeout;
 let audioCtxs=0;g.AudioContext=function(){audioCtxs++}; // a dummy: only counts creations // browsers always have window; the bridge probes window.webkit
-vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},get grid(){return grid},get fx(){return fx},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N,split,P,GX,GY,set lives(v){lives=v}}',g);
+vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},set balls(v){balls=v},set state(v){state=v},get grid(){return grid},get fx(){return fx},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N,split,P,GX,GY,set lives(v){lives=v}}',g);
 const G=g.G,C=G.COLS,dt=1/60;
 assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 
@@ -84,9 +84,20 @@ assert.equal(G.I18N.en.livesN(1),'1 life');assert.equal(G.I18N.fr.livesN(1),'1 v
  assert.equal(inside+out,0,`balls went into steel ${inside}x and past a side wall ${out}x`);
  G.cfg.assist=false;G.level=G.LEVELS.length-1;}
 
+// 10. Canal walls are stacks of cells with 1px seams; a seam must not act as a floor. 110 balls launched up level 1's
+//     canal at 15-55 degrees into the walls must all reach the top (a ghost bounce sent ~4% back down).
+{G.level=0;G.loadLevel();const L=G.LEVELS[0],R=L.length,m=/\.+/.exec(L[R-1]),c0=m.index,c1=c0+m[0].length-1;
+ let top=R-1;while(top>0&&L[top-1][c0-1]==='#'&&!L[top-1].slice(c0,c1+1).includes('#'))top--;
+ const x0=G.GX+c0*G.P,x1=G.GX+(c1+1)*G.P-1,yTop=G.GY+top*G.P,yBot=G.GY+R*G.P;let turned=0;
+ for(let xi=0;xi<=10;xi++)for(const deg of[15,25,35,45,55])for(const side of[-1,1]){
+   G.loadLevel();G.state='play';const s=G.speed,a=deg*Math.PI/180;
+   const b={x:x0+4+(x1-x0-8)*xi/10,y:yBot-6,r:4,vx:side*s*Math.sin(a),vy:-s*Math.cos(a),trail:[]};G.balls=[b];
+   for(let f=0;f<600;f++){G.update(1/120);if(b.y<yTop+4)break;if(b.vy>0&&b.y<yBot-8){turned++;break}}}
+ assert.equal(turned,0,`${turned} balls turned back inside the canal`);G.level=G.LEVELS.length-1;}
+
 // 3. Assisted play wins the same level with no paddle input at all.
 G.cfg.assist=true;G.loadLevel();G.tap();
 for(let i=0;i<60*1200&&G.state==='play';i++)G.update(dt);
 assert.equal(G.state,'win',`assisted play: ${G.state} with ${G.left} bricks left`);
 G.cfg.assist=false;
-console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable + no tunnelling, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
+console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable + no tunnelling + canal seams, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
