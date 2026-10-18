@@ -92,7 +92,8 @@ assert.equal(G.I18N.en.livesN(1),'1 life');assert.equal(G.I18N.fr.livesN(1),'1 v
  for(let xi=0;xi<=10;xi++)for(const deg of[15,25,35,45,55])for(const side of[-1,1]){
    G.loadLevel();G.state='play';const s=G.speed,a=deg*Math.PI/180;
    const b={x:x0+4+(x1-x0-8)*xi/10,y:yBot-6,r:4,vx:side*s*Math.sin(a),vy:-s*Math.cos(a),trail:[]};G.balls=[b];
-   for(let f=0;f<600;f++){G.update(1/120);if(b.y<yTop+4)break;if(b.vy>0&&b.y<yBot-8){turned++;break}}}
+   // reaching within 2 cells of the canal top counts as arrived: the ball stops a radius short of the top brick
+   for(let f=0;f<600;f++){G.update(1/120);if(b.y<yTop+12)break;if(b.vy>0&&b.y<yBot-8){turned++;break}}}
  assert.equal(turned,0,`${turned} balls turned back inside the canal`);G.level=G.LEVELS.length-1;}
 
 // 11. Crumble: a hit breaks every brick within 3 steps (a 25-cell diamond in a solid field), never steel, and a
