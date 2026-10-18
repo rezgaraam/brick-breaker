@@ -17,8 +17,11 @@ python3 -m http.server 8000   # needed only to exercise the service worker (no S
 node pwa-check.js "$CHROMIUM" .   # PWA check: manifest, SW install, offline reload (see file header)
 node bench.js "$CHROMIUM" "$PWD/index.html"   # frame-time check: level 100, 20 balls, 3x DPR, 4x CPU throttle
 ios/run-device.sh                 # iOS on a plugged-in iPhone: sign (team in gitignored ios/Local.xcconfig), install, launch
-ios/check.sh                      # iOS: package tests (swift test) + simulator build (+ UI test if a sim is booted)
+ios/check.sh                      # iOS: package tests (swift test) + simulator build (+ UI tests and audits if a sim is booted)
 ```
+
+Check a gate's exit code directly (`ios/check.sh > log 2>&1; echo $?`), never through `| tail`: a pipe once
+hid a failing gate and a broken commit was pushed.
 
 iOS from the CLI: `cd ios && xcodegen generate` (the .xcodeproj is gitignored, regenerate after editing
 `project.yml`), then build with `-destination 'generic/platform=iOS Simulator' -derivedDataPath build` and
@@ -30,7 +33,7 @@ Headless render of a given level (Playwright's cached Chromium, no npm package n
 
 ```bash
 BIN=~/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-mac-arm64/chrome-headless-shell
-sed 's/let level=Math.min(+localStorage.bb_level||0,LEVELS.length-1)/let level=1/' index.html > /tmp/lvl.html
+sed 's|^applyLang();.*|applyLang();level=99;loadLevel();|' index.html > /tmp/lvl.html   # level index, 0-based
 $BIN --headless --disable-gpu --hide-scrollbars --window-size=340,600 --virtual-time-budget=500 --screenshot=/tmp/lvl.png file:///tmp/lvl.html
 ```
 
@@ -38,7 +41,7 @@ $BIN --headless --disable-gpu --hide-scrollbars --window-size=340,600 --virtual-
 
 The repo root is the site: https://rezgaraam.github.io/brick-breaker/ (GitHub Pages from `master`, `.nojekyll`
 present; pushing `master` is the deploy). `manifest.webmanifest` +
-`icon-192.png`/`icon-512.png` make it installable; `sw.js` is a network-first cache, so a deploy shows on
+`icon-192.png`/`icon-512.png` make it installable (`docs/` holds the README screenshots, also served); `sw.js` is a network-first cache, so a deploy shows on
 the next load with no version bump, and the cache only answers when the network fails. Bump `CACHE` in
 `sw.js` only when its `FILES` list changes. Registration and the screen wake lock in `index.html` are
 behind `?.` and try/catch so `file://` and the headless test stay quiet.
@@ -52,15 +55,21 @@ never copied into git. Two parts, per the stack-ios shape:
   best score), `ProgressStore` (upsert that only raises stars/score, `reset()`, and `seedScript()` which
   emits the JS that primes the page's localStorage from the database), `GameMessage` (parses what the page
   posts; malformed bodies are dropped). Tested with Swift Testing on macOS: `swift test` in that folder.
-- App target: `GameView` (WKWebView, injects the seed at document start, forwards `webkit.messageHandlers.game`
-  bodies), `ContentView` (routes messages: record level, haptic via `sensoryFeedback`, open stats sheet;
+- App target: `GameView` (WKWebView; injects the seed and `window.nativeLang` (the phone's language) at document
+  start, forwards `webkit.messageHandlers.game` bodies, and calls the page's `autoPause()` on
+  `willResignActiveNotification`), `ContentView` (routes messages: record level, haptic via `sensoryFeedback`, open stats sheet;
   bumps `reloadToken` after a reset so the page re-seeds), `StatsView` (`@Query` over the same store,
   reset with confirmation). The database is the source of truth; the page's localStorage is a cache.
 
 The bridge on the web side is `native(...)`, `inApp()` and `haptic()` in `index.html`; every call is a
-no-op in a browser, so the web build never notices the shell. `BrickBreakerUITests` is the end-to-end
-proof: it launches the app on a simulator, taps the page's STATS button and expects the native sheet.
-Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based destinations do not resolve here).
+no-op in a browser, so the web build never notices the shell. `BrickBreakerUITests` drives the real app on a
+simulator: Progress button -> native sheet (the bridge), assisted play through buttons only, pause/resume, and a
+launch with `-AppleLanguages (fr)` that expects both the page and the native sheet in French. Run them with `xcodebuild test ... -destination "id=<booted udid>"` (name-based destinations do not resolve here).
+
+Signing: `ios/Signing.xcconfig` sets automatic signing and includes the gitignored `ios/Local.xcconfig`
+(`DEVELOPMENT_TEAM`). Currently a free personal team: device installs expire after 7 days, no TestFlight.
+`ios/run-device.sh` builds for the device's hardware UDID (not generic iOS), which is what registers a new
+phone with the team. Release steps are in `PLAN-ios.md`.
 
 ## Architecture (all in index.html, read top to bottom)
 
@@ -72,13 +81,12 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
 - **Grid state** is a flat array `grid[r*COLS+c]` of hp numbers (0 empty). `left` counts breakable bricks
   and drives the win check, so anything that removes a brick must decrement it.
 - **Two stacked canvases.** Bricks live on `#bg`; `paint(i)` repaints a single cell when it changes. `#c` sits
-  on top, is cleared every frame and holds only what moves (balls, paddle, pills, particles, HUD). Shake moves
+  on top, is cleared every frame and holds only what moves (balls, paddle, pills, particles, combo text). Shake moves
   `#bg` with a CSS transform. Never draw or copy the brick layer per frame: blitting it at 3x DPR was measured
   as the frame-time bottleneck (38-56ms frames at 4-6x CPU throttle vs 17-18ms after the split).
 - **Coordinates are logical 340x600** (`W`, `H`). `fit()` sizes both canvases' backing stores to the
   on-screen size in device pixels and sets a transform, so game code never sees device pixels. The `#wrap`
-  div fills the screen while keeping the aspect ratio; mute and STATS are real HTML buttons on top of the
-  canvas (accessible, and visible to XCUITest), not canvas text.
+  div fills the screen while keeping the aspect ratio; everything else (HUD, chips, cards, menu) is HTML on top.
 - **Collision**: balls move in <=3px substeps; `collide()` checks only the grid cells under the ball's
   bounding box. `hit()` returns a contact normal only when the ball is moving *into* the rect, and
   `bounce()` sets the sign of a velocity component rather than negating it, so a second overlap on the
@@ -92,12 +100,13 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   whose first button is the primary action. The loop stops in `menu` and `pause`. Timed effects live in
   `fx` (seconds left) and reset in `update()`. Ball speed is `base` = `SPEED` + level.
 - **Power-ups** are the `POWERS` table: label -> `[pill color, effect fn]`. Add one by adding a row.
-- **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake, paddle 0=follow / >0=drag gain) behind a native `<dialog>`;
+- **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake, paddle 0=follow / >0=drag gain,
+  assist, lang) behind a native `<dialog>`;
   `update()` pauses while it is open. Reset progress is a two-tap button: web clears localStorage and reloads,
   the iOS shell receives `{type:'reset'}` and clears SwiftData, then reloads the page.
 - **Juice**: `jolt(n)` adds screen shake that `update()` decays (off under prefers-reduced-motion); each ball
-  carries a short `trail`; `combo` counts bricks since the last paddle hit, scales score and shows on the HUD
-  from 5 up. `burst()` throws confetti particles on a win (particles carry optional colour/size and draw above
+  carries a short `trail`; `combo` counts bricks since the last paddle hit, scales score and is drawn on the
+  playfield from 5 up. `burst()` throws confetti particles on a win (particles carry optional colour/size and draw above
   overlays). Music picks pattern and key from `SONGS` by level band (every 10 levels). Level 100 is a hand-built
   finale, special-cased where `LEVELS` is built.
 - **Sound** is all synthesized: `SFX` table of `tone()`/`noise()` calls, `sfx(k)` guards mute, creates
@@ -105,7 +114,7 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   16-step pattern 100ms ahead of the audio clock from `update()`. Everything audio is inside try/catch so
   headless runs (no `AudioContext`) stay silent.
 - Persistence: `localStorage.bb_stars` (JSON `{levelIndex: stars}`, level i unlocks when i-1 has a
-  star), `localStorage.bb_best` (best score per level) and `localStorage.bb_mute`. Inside the iOS app the
+  star), `localStorage.bb_best` (best score per level), `localStorage.bb_cfg` (settings) and `localStorage.bb_mute`. Inside the iOS app the
   first two are overwritten at every launch from SwiftData.
 
 ## Languages
@@ -119,13 +128,15 @@ Progress screen uses `ios/BrickBreaker/Localizable.xcstrings` (same five languag
 ## Accessibility
 
 Everything a player taps outside the playfield is real HTML, never canvas-drawn: the level select (`goMenu()`
-renders 100 `<button>`s with labels like "Level 4, 2 of 3 stars" / "locked"), mute, settings, STATS, MENU,
-the settings rows (44px `role=switch` buttons), the HUD (score, level, lives) and the pause/win/over cards. Sizes use `cqw` so they track the canvas scale. Game
+renders 100 `<button>`s with labels like "Level 4, 2 of 3 stars" / "locked"; the next one to play gets class
+`next`), the icon chips (mute with `aria-pressed`, settings, Progress in the iOS app, pause), the settings rows
+(44px `role=switch` buttons), the HUD (score, level, lives as `role=img` "3 lives") and the pause/win/over
+cards. Sizes use `cqw` so they track the canvas scale. Game
 events are announced through the `say()` aria-live region. The playfield is a canvas; **Assisted play**
 (`cfg.assist`) makes it playable without steering: `assist()` moves the paddle under the lowest falling ball,
-and a visible Launch / Next level / Retry button (`#go`) replaces tapping the field. Pinch-zoom is allowed
+and a visible Launch button (`#go`) replaces tapping the field (the cards cover next level / retry). Pinch-zoom is allowed
 everywhere except the canvases (`touch-action:none` only there). `AccessibilityAuditTests` runs Apple's `performAccessibilityAudit` on the menu,
-settings and stats screens; it must stay at zero findings. Accepted issues are filtered in the test with their reason (system toolbar
+settings, Progress sheet, ready screen and pause card; it must stay at zero findings. Accepted issues are filtered in the test with their reason (system toolbar
 buttons and Dynamic Type; hit-area findings on non-interactive static text/images, which WebKit reports for
 any plain page text); never filter by skipping audit types.
 
@@ -135,6 +146,8 @@ any plain page text); never filter by skipping audit types.
   flood-fills 2x2 windows of non-steel cells from below and fails on any brick an 8px ball cannot reach.
 - Canvas is 340 wide so the side margins (`GX`=2, 3px right) are narrower than the ball; it cannot slip
   past the grid along the walls. Change `COLS`/`P`/`W` together or re-check this.
+- Paddle top is at y=500 (`H-100`) so the thumb sits below it. The tallest levels (64 rows) end at y=406,
+  leaving ~94px of reaction room; adding rows or lowering `GY` eats into that.
 - Paddle bounce angle is clamped to 4..60 degrees off vertical. Below 4 the ball can lock into
   vertical loops; above 4 a straight shot up a 3-cell canal is impossible.
 
