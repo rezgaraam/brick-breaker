@@ -83,12 +83,14 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   `win` | `over`; `tap()` advances it, the top bar / Escape returns to `menu`. Timed effects live in
   `fx` (seconds left) and reset in `update()`. Ball speed is `base` = `SPEED` + level.
 - **Power-ups** are the `POWERS` table: label -> `[pill color, effect fn]`. Add one by adding a row.
-- **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake) behind a native `<dialog>`;
+- **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake, paddle 0=follow / >0=drag gain) behind a native `<dialog>`;
   `update()` pauses while it is open. Reset progress is a two-tap button: web clears localStorage and reloads,
   the iOS shell receives `{type:'reset'}` and clears SwiftData, then reloads the page.
 - **Juice**: `jolt(n)` adds screen shake that `update()` decays (off under prefers-reduced-motion); each ball
   carries a short `trail`; `combo` counts bricks since the last paddle hit, scales score and shows on the HUD
-  from 5 up. Level 100 is a hand-built finale, special-cased where `LEVELS` is built.
+  from 5 up. `burst()` throws confetti particles on a win (particles carry optional colour/size and draw above
+  overlays). Music picks pattern and key from `SONGS` by level band (every 10 levels). Level 100 is a hand-built
+  finale, special-cased where `LEVELS` is built.
 - **Sound** is all synthesized: `SFX` table of `tone()`/`noise()` calls, `sfx(k)` guards mute, creates
   the `AudioContext` on first use and throttles brick sounds to one per 30ms. `music()` schedules a
   16-step pattern 100ms ahead of the audio clock from `update()`. Everything audio is inside try/catch so
