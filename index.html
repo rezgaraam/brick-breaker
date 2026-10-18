@@ -23,13 +23,9 @@ button:active:not(:disabled){transform:scale(.95);transition:transform .1s ease-
 /* Toolbar: round 44px+ icon chips over the playfield */
 .chip{position:absolute;bottom:2cqw;width:12cqw;height:12cqw;min-width:40px;min-height:40px;display:grid;place-items:center;padding:0;border:1px solid rgba(255,255,255,.1);border-radius:50%;background:rgba(255,255,255,.08);backdrop-filter:blur(8px);color:#e6e6e6}
 .chip svg{width:52%;height:52%}#mute .off,#mute[aria-pressed=true] .on{display:none}#mute[aria-pressed=true] .off{display:inline}
-#mute{left:2cqw}#settings{left:16cqw}#stats{right:2cqw}
-/* In play only pause is reachable, top-left, away from the thumbs that steer the paddle (bottom corners caused
-   accidental pause/mute). Transparent 44px+ hit area; the icon sits in the HUD row. */
-#pause{position:absolute;top:0;left:0;width:max(44px,12cqw);height:max(44px,12cqw);padding:1.1cqw 0 0 2cqw;border:0;background:none;color:#ddd;display:grid;place-items:start}
-#pause svg{width:4.6cqw;height:4.6cqw}
+#mute{left:2cqw}#settings{left:16cqw}#stats,#pause{right:2cqw}
 #go{position:absolute;bottom:2cqw;left:50%;translate:-50% 0;height:12cqw;min-height:40px;padding:0 7cqw;border:0;border-radius:6cqw;background:var(--g);color:#06210a;font-weight:700;font-size:4.4cqw}
-#hud{position:absolute;inset:0 0 auto;display:flex;padding:1.2cqw 2cqw 1.2cqw 9cqw;font:600 3.4cqw var(--mono);color:#ddd;pointer-events:none}
+#hud{position:absolute;inset:0 0 auto;display:flex;padding:1.2cqw 2cqw;font:600 3.4cqw var(--mono);color:#ddd;pointer-events:none}
 #hud span{flex:1}#hLevel{text-align:center}#hLives{text-align:end;color:#ff6b6b;letter-spacing:.1em}
 #hint{position:absolute;top:73%;width:100%;margin:0;text-align:center;font:800 6.2cqw var(--mono);color:#fff;pointer-events:none}
 /* Level select: real buttons (VoiceOver, keyboard, hit testing) */
@@ -73,7 +69,7 @@ dialog .btn{font-size:16px;margin-top:10px;padding:10px}
   <button id="mute" class="chip" data-tl="mute" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   <button id="settings" class="chip" data-tl="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   <button id="stats" class="chip" data-tl="progress" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-8M12 20V5M19 20v-5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></button>
-  <button id="pause" data-tl="pause" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
+  <button id="pause" class="chip" data-tl="pause" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
   <button id="go" data-t="launch" hidden></button>
   <div id="card" hidden><div class="panel" role="dialog" aria-labelledby="cTitle"><h2 id="cTitle"></h2><p id="cStars" aria-hidden="true"></p><p id="cInfo"></p><div id="cBtns"></div></div></div>
   <p id="say" class="sr" aria-live="polite"></p></div>
@@ -233,12 +229,15 @@ const POWERS={
 },PK=Object.keys(POWERS);
 function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,trail:[],vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
 
-const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true,paddle:0,speed:1,assist:false,lang:'auto'},JSON.parse(localStorage.bb_cfg||'{}')),dlg=document.getElementById('cfg');
+// Saved data: every read and write goes through store. Blocked storage (privacy settings) or a corrupted value used
+// to throw at load and leave a blank page; now it falls back to defaults and the game still runs.
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}},del(k){try{localStorage.removeItem(k)}catch{}}};
+const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true,paddle:0,speed:1,assist:false,lang:'auto'},store.get('bb_cfg',{})),dlg=document.getElementById('cfg');
 // Ball speed setting: multiplier on the per-level base speed. Unknown stored values fall back to Normal.
 const SPEEDS={0.75:'speedSlow',1:'speedNormal',1.25:'speedFast',1.5:'speedVeryFast'},SPEED_KEYS=Object.keys(SPEEDS).map(Number);
 if(!SPEED_KEYS.includes(cfg.speed))cfg.speed=1;
 const baseSpeed=()=>(SPEED+level)*cfg.speed;
-let stars=JSON.parse(localStorage.bb_stars||'{}'),best=JSON.parse(localStorage.bb_best||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
+let stars=store.get('bb_stars',{}),best=store.get('bb_best',{}),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
 const unlocked=i=>i===0||stars[i-1]>0;
 // ---- Languages. t(key, ...args): strings or functions; missing keys fall back to English. test.js checks every
 // language has exactly the English key set. Persian is right-to-left (applyLang sets dir).
@@ -290,7 +289,7 @@ function setSpeed(s){speed=s;for(const b of balls){const k=s/(Math.hypot(b.vx,b.
 function clampAngle(b){const s=Math.hypot(b.vx,b.vy),m=.3*s;if(Math.abs(b.vy)<m){b.vy=(Math.sign(b.vy)||-1)*m;b.vx=Math.sign(b.vx||1)*Math.sqrt(s*s-m*m)}return b}
 
 // ---- Sound: synthesized with WebAudio, no asset files. The context is created on the first tap. ----
-let ac,muted=localStorage.bb_mute==='1',lastSfx=0,combo=0;
+let ac,muted=store.get('bb_mute',0)===1,lastSfx=0,combo=0; // stored as 1/0, same text as the old '1'/'0'
 // Screen shake: jolt() adds, update() decays. Off when the OS asks for reduced motion.
 let shake=0;const calm=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 function jolt(n){if(!calm&&cfg.shake)shake=Math.min(8,shake+n)}
@@ -325,7 +324,7 @@ function music(){
   const band=level/10|0,[B,A]=SONGS[band%SONGS.length],tr=[0,3,5,7][band%4],dur=.125*(1-level/500);
   while(nextNote<ac.currentTime+.1){const t=Math.max(nextNote,ac.currentTime),f=110*2**((B[step]+tr)/12),a=f*2**(A[step]/12);tone(f,f,dur,'square',.03,t);tone(a,a,dur*.65,'triangle',.02,t);nextNote=t+dur;step=(step+1)%16}
 }
-function toggleMute(){muted=!muted;localStorage.bb_mute=muted?'1':'0';muteBtn.setAttribute('aria-pressed',String(muted))}
+function toggleMute(){muted=!muted;store.set('bb_mute',muted?1:0);muteBtn.setAttribute('aria-pressed',String(muted))}
 muteBtn.setAttribute('aria-pressed',String(muted));
 
 // Ball vs grid, axis-separated (the standard tile-map method): each substep moves along x, and if the ball now
@@ -351,7 +350,7 @@ function advance(b,dt){
     const from=b[k];b[k]+=b[v]*dt;
     const touched=overlapping(b);if(!touched.length)continue;
     const blocked=touched.some(i=>grid[i]===Infinity||!(fx.fire>0));
-    touched.forEach(strike);
+    for(const i of touched)if(grid[i]>0)strike(i); // an earlier blast in this move may have destroyed it already
     if(blocked){b[k]=from;b[v]=-b[v]}
   }
   if(b.x<b.r){b.x=b.r;b.vx=Math.abs(b.vx)}
@@ -400,7 +399,7 @@ function update(dt){
     for(const b of balls){b.trail.push({x:b.x,y:b.y});if(b.trail.length>8)b.trail.shift();const n=Math.ceil(speed*dt/3);for(let i=0;i<n;i++)advance(b,dt/n)}
     balls=balls.filter(b=>b.y<H+b.r);
     if(!balls.length){lives--;sfx('lose');jolt(8);if(lives<=0){state='over';showCard('over');say(t('sayOver',score))}else{resetBall();say(t('sayLost',lives))}}
-    else if(!left){state='win';const s=Math.min(3,lives);newBest=score>(best[level]||0);stars[level]=Math.max(stars[level]||0,s);best[level]=Math.max(best[level]||0,score);localStorage.bb_stars=JSON.stringify(stars);localStorage.bb_best=JSON.stringify(best);native({type:'level',level,stars:s,score});sfx('win');burst();showCard('win');say(t('sayWin',s,score))}
+    else if(!left){state='win';const s=Math.min(3,lives);newBest=score>(best[level]||0);stars[level]=Math.max(stars[level]||0,s);best[level]=Math.max(best[level]||0,score);store.set('bb_stars',stars);store.set('bb_best',best);native({type:'level',level,stars:s,score});sfx('win');burst();showCard('win');say(t('sayWin',s,score))}
     for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;jolt(2);sfx(POWERS[p.t][0]==='#f80'?'bad':'power')}}
     pows=pows.filter(p=>p.y<H);
   }
@@ -447,7 +446,6 @@ function draw(){
   goBtn.hidden=!(cfg.assist&&state==='ready');hint.hidden=!(state==='ready'&&!cfg.assist);
   menuEl.hidden=state!=='menu';hud.hidden=state==='menu';
   statsBtn.hidden=!(inApp()&&state==='menu');pauseBtn.hidden=!(state==='play'||state==='ready');
-  muteBtn.hidden=settingsBtn.hidden=state!=='menu'; // in play the thumbs live down there; settings are in the pause card
   if(state==='menu')return;
   // HUD is HTML (readable by VoiceOver, translated); text is only written when it changes
   const hs=`${t('score')} ${score}`,hl=`${t('levelHud')} ${level+1}`;
@@ -488,7 +486,7 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>{keys[e.key]=0});
 muteBtn.onclick=toggleMute;pauseBtn.onclick=pause;goBtn.onclick=()=>tap();statsBtn.onclick=()=>native({type:'stats'});
-// Settings dialog: toggles persist in localStorage; reset clears progress (through the shell on iOS).
+// Settings dialog: toggles persist via store; reset clears progress (through the shell on iOS).
 // Nothing half-visible behind the modal dialog; tied to its own open/close, not to the (possibly stopped) loop.
 document.getElementById('settings').onclick=()=>{dlg.showModal();wrap.style.visibility='hidden'};
 // Menu call to action: the first unlocked level without stars (or the last one), i.e. where the player left off.
@@ -496,7 +494,7 @@ const nextLevel=()=>{let i=0;while(i<LEVELS.length-1&&stars[i])i++;return i};
 document.getElementById('play').onclick=()=>{level=nextLevel();loadLevel()};
 dlg.onclose=()=>{wrap.style.visibility=''};
 // Each setting is one full-width 44px button: role=switch for on/off, a cycling button for paddle mode and language.
-const PADS=[0,1,1.5,2],saveCfg=()=>{localStorage.bb_cfg=JSON.stringify(cfg)},optShow=[];
+const PADS=[0,1,1.5,2],saveCfg=()=>store.set('bb_cfg',cfg),optShow=[];
 const cycle=(list,v)=>list[(list.indexOf(v)+1)%list.length];
 const CYCLES={paddle:PADS,speed:SPEED_KEYS,lang:LANG_KEYS},LABELS={lang:'language',speed:'ballSpeed'};
 $('opts').append(...['music','sfx','haptics','shake','speed','paddle','assist','lang'].filter(k=>k!=='haptics'||inApp()).map(k=>{
@@ -512,7 +510,7 @@ $('opts').append(...['music','sfx','haptics','shake','speed','paddle','assist','
 const resetBtn=document.getElementById('reset');let armed=0;
 resetBtn.onclick=()=>{
   if(!armed){resetBtn.textContent=t('confirmReset');armed=setTimeout(()=>{armed=0;resetBtn.textContent=t('reset')},3000);return}
-  clearTimeout(armed);if(inApp())native({type:'reset'});else{delete localStorage.bb_stars;delete localStorage.bb_best;location.reload()}
+  clearTimeout(armed);if(inApp())native({type:'reset'});else{store.del('bb_stars');store.del('bb_best');location.reload()}
 };
 addEventListener('resize',()=>{fit();for(let i=0;i<grid.length;i++)paint(i)});
 

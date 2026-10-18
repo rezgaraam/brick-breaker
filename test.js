@@ -6,7 +6,7 @@ const src=fs.readFileSync(__dirname+'/index.html','utf8').match(/<script>([\s\S]
 const noop=()=>{};
 const ctx2d=new Proxy({},{get:()=>noop,set:()=>true});
 const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,setAttribute:noop,getContext:()=>ctx2d,addEventListener:noop,getBoundingClientRect:()=>({left:0,top:0,width:340,height:600})};
-const g={document:{documentElement:{},addEventListener:noop,body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop,focus:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
+const g={document:{documentElement:{},addEventListener:noop,body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop,focus:noop}),querySelectorAll:()=>[]},localStorage:(()=>{const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k)}})(),addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
 g.window=g;g.setTimeout=setTimeout;g.clearTimeout=clearTimeout;
 let audioCtxs=0;g.AudioContext=function(){audioCtxs++}; // a dummy: only counts creations // browsers always have window; the bridge probes window.webkit
 vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},crumble,set balls(v){balls=v},set state(v){state=v},get grid(){return grid},get fx(){return fx},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N,split,P,GX,GY,set lives(v){lives=v}}',g);
@@ -104,9 +104,16 @@ assert.equal(G.I18N.en.livesN(1),'1 life');assert.equal(G.I18N.fr.livesN(1),'1 v
  G.grid[5*C+10]=2;G.crumble(5,10);assert.equal(G.grid[5*C+10],1,'two-hit brick lost more than one hit point');
  G.LEVELS.pop();G.level=G.LEVELS.length-1;}
 
+// 12. Saved data never breaks loading: a corrupted value and fully blocked storage must both still boot the game,
+//     and a won level must reach storage.
+assert.equal(g.localStorage.getItem('bb_stars')!==null,true,'win was not saved');
+for(const ls of[{value:{getItem:k=>k==='bb_cfg'?'{':null,setItem:noop,removeItem:noop}},{get(){throw new Error('SecurityError')}}]){
+  const h={...g,document:g.document};Object.defineProperty(h,'localStorage',ls);h.window=h;vm.createContext(h);
+  assert.doesNotThrow(()=>vm.runInContext(src,h),'game failed to load with broken storage');}
+
 // 3. Assisted play wins the same level with no paddle input at all.
 G.cfg.assist=true;G.loadLevel();G.tap();
 for(let i=0;i<60*1200&&G.state==='play';i++)G.update(dt);
 assert.equal(G.state,'win',`assisted play: ${G.state} with ${G.left} bricks left`);
 G.cfg.assist=false;
-console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable + no tunnelling + canal seams + crumble, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
+console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable + no tunnelling + canal seams + crumble, broken storage, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
