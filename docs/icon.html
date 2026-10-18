@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- App icon source. Render: headless Chromium --window-size=1024,1024 --screenshot, then resize to 512/192.
+     Square, opaque, no text: iOS applies its own corner mask. -->
+<meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+<canvas id="c" width="1024" height="1024"></canvas>
+<script>
+const x=document.getElementById('c').getContext('2d'),S=1024;
+// background: deep green-black with a glow behind the field
+let g=x.createLinearGradient(0,0,0,S);g.addColorStop(0,'#13261a');g.addColorStop(1,'#030604');x.fillStyle=g;x.fillRect(0,0,S,S);
+g=x.createRadialGradient(512,380,40,512,380,560);g.addColorStop(0,'rgba(92,185,72,.35)');g.addColorStop(1,'rgba(92,185,72,0)');x.fillStyle=g;x.fillRect(0,0,S,S);
+
+// 10 x 6 grid of 80px cells, 8px gutters, field from (112,128)
+const C=80,G=8,X0=112,Y0=128,cell=(c,r)=>[X0+c*C+G/2,Y0+r*C+G/2,C-G,C-G];
+function brick(c,r,top,base,dark){
+  const[px,py,w,h]=cell(c,r),rad=12;
+  x.fillStyle=dark;x.beginPath();x.roundRect(px,py,w,h,rad);x.fill();                 // shadow edge
+  x.fillStyle=base;x.beginPath();x.roundRect(px,py,w,h-7,rad);x.fill();               // face
+  x.fillStyle=top;x.beginPath();x.roundRect(px+6,py+5,w-12,14,7);x.fill();            // highlight
+}
+const steel=(c,r)=>brick(c,r,'#e4e4e4','#a3a3a3','#5d5d5d');
+const green=(c,r,deep)=>deep?brick(c,r,'#6cc35a','#2f8f3c','#1a5a24'):brick(c,r,'#a8f08f','#5cb948','#2f7a2a');
+// canal: interior columns 4-5, open from row 3 down through the bottom wall; walls at columns 3 and 6
+const canal=(c,r)=>c>=4&&c<=5&&r>=3, broken=new Set(['4,2','5,2','5,1','6,2']);
+for(let r=0;r<6;r++)for(let c=0;c<10;c++){
+  if(canal(c,r)||broken.has(c+','+r))continue;
+  const frame=r===0||c===0||c===9||r===5,wall=(c===3||c===6)&&r>=3;
+  if(frame||wall)steel(c,r);else green(c,r,(c+r)%4===0);
+}
+// debris flying out of the broken bricks
+const bits=[[468,262,22,'#a8f08f'],[560,236,18,'#5cb948'],[602,300,14,'#a8f08f'],[512,214,12,'#ffffff'],[640,252,16,'#5cb948'],[430,300,12,'#ffffff']];
+for(const[bx,by,s,col]of bits){x.save();x.translate(bx,by);x.rotate((bx+by)%7/7);x.fillStyle=col;x.fillRect(-s/2,-s/2,s,s);x.restore()}
+
+// paddle and the ball's flight: trail from the paddle up the canal to the ball
+const bx=552,by=330,px=470,py=860;
+for(let i=0;i<14;i++){const t=i/14,cx=px+(bx-px)*t,cy=py+(by-py)*t;x.fillStyle=`rgba(255,255,255,${.04+.22*t})`;x.beginPath();x.arc(cx,cy,10+20*t,0,7);x.fill()}
+g=x.createRadialGradient(bx,by,0,bx,by,90);g.addColorStop(0,'rgba(255,255,255,.55)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.beginPath();x.arc(bx,by,90,0,7);x.fill();
+x.fillStyle='#fff';x.beginPath();x.arc(bx,by,36,0,7);x.fill();
+g=x.createLinearGradient(0,py-28,0,py+28);g.addColorStop(0,'#ffb08f');g.addColorStop(1,'#d9542d');
+x.fillStyle=g;x.beginPath();x.roundRect(px-160,py-6,320,56,28);x.fill();
+x.fillStyle='rgba(255,255,255,.45)';x.beginPath();x.roundRect(px-140,py+2,280,12,6);x.fill();
+</script>
