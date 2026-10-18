@@ -30,6 +30,8 @@ struct GameView: UIViewRepresentable {
         #endif
         context.coordinator.reloadToken = reloadToken
         context.coordinator.webView = webView
+        context.coordinator.reload = { [weak webView] in if let webView { reseedAndLoad(webView) } }
+        webView.navigationDelegate = context.coordinator
         load(webView)
         return webView
     }
@@ -38,7 +40,12 @@ struct GameView: UIViewRepresentable {
         context.coordinator.onMessage = onMessage
         guard context.coordinator.reloadToken != reloadToken else { return }
         context.coordinator.reloadToken = reloadToken
-        // Progress was reset: re-seed and reload so the page matches the database again.
+        reseedAndLoad(webView) // progress was reset: the page must match the database again
+    }
+
+    /// User scripts are fixed strings, so any reload must rebuild them from the database first;
+    /// otherwise the page boots with the progress snapshot from when the view was created.
+    private func reseedAndLoad(_ webView: WKWebView) {
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
         addScripts(to: controller)
@@ -61,9 +68,10 @@ struct GameView: UIViewRepresentable {
         webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
     }
 
-    final class Coordinator: NSObject, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         var onMessage: (GameMessage) -> Void
         var reloadToken = 0
+        var reload: (() -> Void)?
         weak var webView: WKWebView?
         private var resignObserver: NSObjectProtocol?
 
@@ -80,6 +88,12 @@ struct GameView: UIViewRepresentable {
 
         deinit {
             if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        }
+
+        /// iOS can kill the web content process while the app is in the background. Reload from the
+        /// database instead of letting WebKit replay the stale launch-time seed (or leave a blank view).
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            reload?()
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {

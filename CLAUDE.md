@@ -57,7 +57,9 @@ never copied into git. Two parts, per the stack-ios shape:
   posts; malformed bodies are dropped). Tested with Swift Testing on macOS: `swift test` in that folder.
 - App target: `GameView` (WKWebView; injects the seed and `window.nativeLang` (the phone's language) at document
   start, forwards `webkit.messageHandlers.game` bodies, and calls the page's `autoPause()` on
-  `willResignActiveNotification`), `ContentView` (routes messages: record level, haptic via `sensoryFeedback`, open stats sheet;
+  `willResignActiveNotification`; on `webViewWebContentProcessDidTerminate` it rebuilds the seed from the
+  database and reloads, because user scripts are fixed strings and a WebKit auto-reload would replay the
+  launch-time progress), `ContentView` (routes messages: record level, haptic via `sensoryFeedback`, open stats sheet;
   bumps `reloadToken` after a reset so the page re-seeds), `StatsView` (`@Query` over the same store,
   reset with confirmation). The database is the source of truth; the page's localStorage is a cache.
 
@@ -98,10 +100,11 @@ phone with the team. Release steps are in `PLAN-ios.md`.
   `win` | `over`, plus `pause` (from ready/play; `pause()`/`resume()`, P or Escape, auto on `visibilitychange`
   and when the iOS app resigns active via `autoPause()`). `win`/`over`/`pause` show one HTML card (`showCard`)
   whose first button is the primary action. The loop stops in `menu` and `pause`. Timed effects live in
-  `fx` (seconds left) and reset in `update()`. Ball speed is `base` = `SPEED` + level.
+  `fx` (seconds left) and reset in `update()`. Ball speed is `base` = (`SPEED` + level) x `cfg.speed`; the slow/fast power-ups scale `base` (x0.7 / x1.35).
+  `resetBall()` also resets `combo`, so a combo never carries into a new ball or level.
 - **Power-ups** are the `POWERS` table: label -> `[pill color, effect fn]`. Add one by adding a row.
-- **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake, paddle 0=follow / >0=drag gain,
-  assist, lang) behind a native `<dialog>`;
+- **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake, speed (ball speed multiplier
+  0.75/1/1.25/1.5, applied live via `baseSpeed()`), paddle 0=follow / >0=drag gain, assist, lang) behind a native `<dialog>`;
   `update()` pauses while it is open. Reset progress is a two-tap button: web clears localStorage and reloads,
   the iOS shell receives `{type:'reset'}` and clears SwiftData, then reloads the page.
 - **Juice**: `jolt(n)` adds screen shake that `update()` decays (off under prefers-reduced-motion); each ball

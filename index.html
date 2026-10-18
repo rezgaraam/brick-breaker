@@ -196,23 +196,27 @@ const POWERS={
   '+1':['#fd3',()=>lives=Math.min(lives+1,5)],
   W:['#3cf',()=>{pad.w=90;fx.pad=8}],
   F:['#f44',()=>fx.fire=6],
-  S:['#3cf',()=>{setSpeed(200);fx.speed=8}],
+  S:['#3cf',()=>{setSpeed(base*.7);fx.speed=8}],
   N:['#f80',()=>{pad.w=40;fx.pad=8}],
-  '>>':['#f80',()=>{setSpeed(380);fx.speed=8}],
+  '>>':['#f80',()=>{setSpeed(base*1.35);fx.speed=8}],
 },PK=Object.keys(POWERS);
 function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,trail:[],vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
 
-const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true,paddle:0,assist:false,lang:'auto'},JSON.parse(localStorage.bb_cfg||'{}')),dlg=document.getElementById('cfg');
+const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true,paddle:0,speed:1,assist:false,lang:'auto'},JSON.parse(localStorage.bb_cfg||'{}')),dlg=document.getElementById('cfg');
+// Ball speed setting: multiplier on the per-level base speed. Unknown stored values fall back to Normal.
+const SPEEDS={0.75:'speedSlow',1:'speedNormal',1.25:'speedFast',1.5:'speedVeryFast'},SPEED_KEYS=Object.keys(SPEEDS).map(Number);
+if(!SPEED_KEYS.includes(cfg.speed))cfg.speed=1;
+const baseSpeed=()=>(SPEED+level)*cfg.speed;
 let stars=JSON.parse(localStorage.bb_stars||'{}'),best=JSON.parse(localStorage.bb_best||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
 const unlocked=i=>i===0||stars[i-1]>0;
 // ---- Languages. t(key, ...args): strings or functions; missing keys fall back to English. test.js checks every
 // language has exactly the English key set. Persian is right-to-left (applyLang sets dir).
 const I18N={
-  en:{settings:'Settings',music:'Music',sfx:'Sound effects',haptics:'Haptics',shake:'Screen shake',paddle:'Paddle',follow:'Follow finger',drag:n=>`Drag ${n}x`,assist:'Assisted play',language:'Language',auto:'Automatic',on:'On',off:'Off',reset:'Reset progress',confirmReset:'Tap again to confirm',close:'Close',progress:'Progress',pause:'Pause',paused:'Paused',resume:'Resume',restart:'Restart',menu:'Menu',launch:'Launch',next:'Next level',retry:'Retry',levelN:n=>`Level ${n}`,levelStars:(n,s)=>`Level ${n}, ${s} of 3 stars`,locked:n=>`Level ${n}, locked`,score:'SCORE',best:'BEST',levelHud:'LEVEL',tapLaunch:'TAP TO LAUNCH',combo:'COMBO x',congrats:'Congratulations',youWin:'You win!',gameOver:'Game over',allDone:'All levels done!',sayStart:n=>`Level ${n}. Tap to launch.`,sayLost:l=>`Ball lost. ${l} lives left.`,sayWin:(s,c)=>`Level cleared. ${s} of 3 stars. Score ${c}.`,sayOver:c=>`Game over. Score ${c}.`,gameField:'Game field',mute:'Mute',levels:'Levels',livesN:n=>`${n} lives`},
-  fr:{settings:'Réglages',music:'Musique',sfx:'Effets sonores',haptics:'Vibrations',shake:'Tremblement de l’écran',paddle:'Raquette',follow:'Suivre le doigt',drag:n=>`Glisser ${n}x`,assist:'Jeu assisté',language:'Langue',auto:'Automatique',on:'Oui',off:'Non',reset:'Réinitialiser la progression',confirmReset:'Touchez encore pour confirmer',close:'Fermer',progress:'Progrès',pause:'Pause',paused:'En pause',resume:'Reprendre',restart:'Recommencer',menu:'Menu',launch:'Lancer',next:'Niveau suivant',retry:'Réessayer',levelN:n=>`Niveau ${n}`,levelStars:(n,s)=>`Niveau ${n}, ${s} étoiles sur 3`,locked:n=>`Niveau ${n}, verrouillé`,score:'SCORE',best:'RECORD',levelHud:'NIVEAU',tapLaunch:'TOUCHEZ POUR LANCER',combo:'COMBO x',congrats:'Félicitations',youWin:'Vous avez gagné !',gameOver:'Partie terminée',allDone:'Tous les niveaux sont terminés !',sayStart:n=>`Niveau ${n}. Touchez pour lancer.`,sayLost:l=>`Balle perdue. Encore ${l} vies.`,sayWin:(s,c)=>`Niveau terminé. ${s} étoiles sur 3. Score ${c}.`,sayOver:c=>`Partie terminée. Score ${c}.`,gameField:'Terrain de jeu',mute:'Couper le son',levels:'Niveaux',livesN:n=>`${n} vies`},
-  de:{settings:'Einstellungen',music:'Musik',sfx:'Soundeffekte',haptics:'Haptik',shake:'Bildschirmwackeln',paddle:'Schläger',follow:'Finger folgen',drag:n=>`Ziehen ${n}x`,assist:'Unterstütztes Spielen',language:'Sprache',auto:'Automatisch',on:'An',off:'Aus',reset:'Fortschritt zurücksetzen',confirmReset:'Zum Bestätigen erneut tippen',close:'Schließen',progress:'Fortschritt',pause:'Pause',paused:'Pausiert',resume:'Weiter',restart:'Neu starten',menu:'Menü',launch:'Starten',next:'Nächstes Level',retry:'Nochmal',levelN:n=>`Level ${n}`,levelStars:(n,s)=>`Level ${n}, ${s} von 3 Sternen`,locked:n=>`Level ${n}, gesperrt`,score:'PUNKTE',best:'REKORD',levelHud:'LEVEL',tapLaunch:'TIPPEN ZUM STARTEN',combo:'KOMBO x',congrats:'Glückwunsch',youWin:'Gewonnen!',gameOver:'Spiel vorbei',allDone:'Alle Level geschafft!',sayStart:n=>`Level ${n}. Tippen zum Starten.`,sayLost:l=>`Ball verloren. Noch ${l} Leben.`,sayWin:(s,c)=>`Level geschafft. ${s} von 3 Sternen. ${c} Punkte.`,sayOver:c=>`Spiel vorbei. ${c} Punkte.`,gameField:'Spielfeld',mute:'Stumm',levels:'Level',livesN:n=>`${n} Leben`},
-  es:{settings:'Ajustes',music:'Música',sfx:'Efectos de sonido',haptics:'Vibración',shake:'Temblor de pantalla',paddle:'Pala',follow:'Seguir el dedo',drag:n=>`Arrastrar ${n}x`,assist:'Juego asistido',language:'Idioma',auto:'Automático',on:'Sí',off:'No',reset:'Restablecer progreso',confirmReset:'Toca de nuevo para confirmar',close:'Cerrar',progress:'Progreso',pause:'Pausa',paused:'En pausa',resume:'Continuar',restart:'Reiniciar',menu:'Menú',launch:'Lanzar',next:'Siguiente nivel',retry:'Reintentar',levelN:n=>`Nivel ${n}`,levelStars:(n,s)=>`Nivel ${n}, ${s} de 3 estrellas`,locked:n=>`Nivel ${n}, bloqueado`,score:'PUNTOS',best:'RÉCORD',levelHud:'NIVEL',tapLaunch:'TOCA PARA LANZAR',combo:'COMBO x',congrats:'¡Felicidades!',youWin:'¡Has ganado!',gameOver:'Fin del juego',allDone:'¡Todos los niveles completados!',sayStart:n=>`Nivel ${n}. Toca para lanzar.`,sayLost:l=>`Bola perdida. Quedan ${l} vidas.`,sayWin:(s,c)=>`Nivel completado. ${s} de 3 estrellas. ${c} puntos.`,sayOver:c=>`Fin del juego. ${c} puntos.`,gameField:'Campo de juego',mute:'Silenciar',levels:'Niveles',livesN:n=>`${n} vidas`},
-  fa:{settings:'تنظیمات',music:'موسیقی',sfx:'جلوه‌های صوتی',haptics:'بازخورد لمسی',shake:'لرزش صفحه',paddle:'راکت',follow:'دنبال کردن انگشت',drag:n=>`کشیدن ×${n}`,assist:'بازی با کمک',language:'زبان',auto:'خودکار',on:'روشن',off:'خاموش',reset:'بازنشانی پیشرفت',confirmReset:'برای تأیید دوباره بزنید',close:'بستن',progress:'پیشرفت',pause:'توقف',paused:'متوقف شد',resume:'ادامه',restart:'شروع دوباره',menu:'منو',launch:'پرتاب',next:'مرحله بعد',retry:'تلاش دوباره',levelN:n=>`مرحله ${n}`,levelStars:(n,s)=>`مرحله ${n}، ${s} از ۳ ستاره`,locked:n=>`مرحله ${n}، قفل`,score:'امتیاز',best:'بهترین',levelHud:'مرحله',tapLaunch:'برای پرتاب بزنید',combo:'کمبو x',congrats:'تبریک!',youWin:'بردید!',gameOver:'بازی تمام شد',allDone:'همه مراحل تمام شد!',sayStart:n=>`مرحله ${n}. برای پرتاب بزنید.`,sayLost:l=>`توپ از دست رفت. ${l} جان باقی است.`,sayWin:(s,c)=>`مرحله تمام شد. ${s} از ۳ ستاره. امتیاز ${c}.`,sayOver:c=>`بازی تمام شد. امتیاز ${c}.`,gameField:'زمین بازی',mute:'بی‌صدا',levels:'مراحل',livesN:n=>`${n} جان`},
+  en:{settings:'Settings',music:'Music',sfx:'Sound effects',haptics:'Haptics',shake:'Screen shake',paddle:'Paddle',follow:'Follow finger',drag:n=>`Drag ${n}x`,assist:'Assisted play',language:'Language',auto:'Automatic',on:'On',off:'Off',reset:'Reset progress',confirmReset:'Tap again to confirm',close:'Close',progress:'Progress',pause:'Pause',paused:'Paused',resume:'Resume',restart:'Restart',menu:'Menu',launch:'Launch',next:'Next level',retry:'Retry',levelN:n=>`Level ${n}`,levelStars:(n,s)=>`Level ${n}, ${s} of 3 stars`,locked:n=>`Level ${n}, locked`,score:'SCORE',best:'BEST',levelHud:'LEVEL',tapLaunch:'TAP TO LAUNCH',combo:'COMBO x',congrats:'Congratulations',youWin:'You win!',gameOver:'Game over',allDone:'All levels done!',sayStart:n=>`Level ${n}. Tap to launch.`,sayLost:l=>`Ball lost. ${l} ${l===1?'life':'lives'} left.`,sayWin:(s,c)=>`Level cleared. ${s} of 3 stars. Score ${c}.`,sayOver:c=>`Game over. Score ${c}.`,gameField:'Game field',mute:'Mute',levels:'Levels',livesN:n=>`${n} ${n===1?'life':'lives'}`,ballSpeed:'Ball speed',speedSlow:'Slow',speedNormal:'Normal',speedFast:'Fast',speedVeryFast:'Very fast'},
+  fr:{settings:'Réglages',music:'Musique',sfx:'Effets sonores',haptics:'Vibrations',shake:'Tremblement de l’écran',paddle:'Raquette',follow:'Suivre le doigt',drag:n=>`Glisser ${n}x`,assist:'Jeu assisté',language:'Langue',auto:'Automatique',on:'Oui',off:'Non',reset:'Réinitialiser la progression',confirmReset:'Touchez encore pour confirmer',close:'Fermer',progress:'Progrès',pause:'Pause',paused:'En pause',resume:'Reprendre',restart:'Recommencer',menu:'Menu',launch:'Lancer',next:'Niveau suivant',retry:'Réessayer',levelN:n=>`Niveau ${n}`,levelStars:(n,s)=>`Niveau ${n}, ${s} ${s>1?'étoiles':'étoile'} sur 3`,locked:n=>`Niveau ${n}, verrouillé`,score:'SCORE',best:'RECORD',levelHud:'NIVEAU',tapLaunch:'TOUCHEZ POUR LANCER',combo:'COMBO x',congrats:'Félicitations',youWin:'Vous avez gagné !',gameOver:'Partie terminée',allDone:'Tous les niveaux sont terminés !',sayStart:n=>`Niveau ${n}. Touchez pour lancer.`,sayLost:l=>`Balle perdue. Encore ${l} ${l>1?'vies':'vie'}.`,sayWin:(s,c)=>`Niveau terminé. ${s} ${s>1?'étoiles':'étoile'} sur 3. Score ${c}.`,sayOver:c=>`Partie terminée. Score ${c}.`,gameField:'Terrain de jeu',mute:'Couper le son',levels:'Niveaux',livesN:n=>`${n} ${n>1?'vies':'vie'}`,ballSpeed:'Vitesse de la balle',speedSlow:'Lente',speedNormal:'Normale',speedFast:'Rapide',speedVeryFast:'Très rapide'},
+  de:{settings:'Einstellungen',music:'Musik',sfx:'Soundeffekte',haptics:'Haptik',shake:'Bildschirmwackeln',paddle:'Schläger',follow:'Finger folgen',drag:n=>`Ziehen ${n}x`,assist:'Unterstütztes Spielen',language:'Sprache',auto:'Automatisch',on:'An',off:'Aus',reset:'Fortschritt zurücksetzen',confirmReset:'Zum Bestätigen erneut tippen',close:'Schließen',progress:'Fortschritt',pause:'Pause',paused:'Pausiert',resume:'Weiter',restart:'Neu starten',menu:'Menü',launch:'Starten',next:'Nächstes Level',retry:'Nochmal',levelN:n=>`Level ${n}`,levelStars:(n,s)=>`Level ${n}, ${s} von 3 Sternen`,locked:n=>`Level ${n}, gesperrt`,score:'PUNKTE',best:'REKORD',levelHud:'LEVEL',tapLaunch:'TIPPEN ZUM STARTEN',combo:'KOMBO x',congrats:'Glückwunsch',youWin:'Gewonnen!',gameOver:'Spiel vorbei',allDone:'Alle Level geschafft!',sayStart:n=>`Level ${n}. Tippen zum Starten.`,sayLost:l=>`Ball verloren. Noch ${l} Leben.`,sayWin:(s,c)=>`Level geschafft. ${s} von 3 Sternen. ${c} Punkte.`,sayOver:c=>`Spiel vorbei. ${c} Punkte.`,gameField:'Spielfeld',mute:'Stumm',levels:'Level',livesN:n=>`${n} Leben`,ballSpeed:'Ballgeschwindigkeit',speedSlow:'Langsam',speedNormal:'Normal',speedFast:'Schnell',speedVeryFast:'Sehr schnell'},
+  es:{settings:'Ajustes',music:'Música',sfx:'Efectos de sonido',haptics:'Vibración',shake:'Temblor de pantalla',paddle:'Pala',follow:'Seguir el dedo',drag:n=>`Arrastrar ${n}x`,assist:'Juego asistido',language:'Idioma',auto:'Automático',on:'Sí',off:'No',reset:'Restablecer progreso',confirmReset:'Toca de nuevo para confirmar',close:'Cerrar',progress:'Progreso',pause:'Pausa',paused:'En pausa',resume:'Continuar',restart:'Reiniciar',menu:'Menú',launch:'Lanzar',next:'Siguiente nivel',retry:'Reintentar',levelN:n=>`Nivel ${n}`,levelStars:(n,s)=>`Nivel ${n}, ${s} de 3 estrellas`,locked:n=>`Nivel ${n}, bloqueado`,score:'PUNTOS',best:'RÉCORD',levelHud:'NIVEL',tapLaunch:'TOCA PARA LANZAR',combo:'COMBO x',congrats:'¡Felicidades!',youWin:'¡Has ganado!',gameOver:'Fin del juego',allDone:'¡Todos los niveles completados!',sayStart:n=>`Nivel ${n}. Toca para lanzar.`,sayLost:l=>l===1?'Bola perdida. Queda 1 vida.':`Bola perdida. Quedan ${l} vidas.`,sayWin:(s,c)=>`Nivel completado. ${s} de 3 estrellas. ${c} puntos.`,sayOver:c=>`Fin del juego. ${c} puntos.`,gameField:'Campo de juego',mute:'Silenciar',levels:'Niveles',livesN:n=>`${n} ${n===1?'vida':'vidas'}`,ballSpeed:'Velocidad de la bola',speedSlow:'Lenta',speedNormal:'Normal',speedFast:'Rápida',speedVeryFast:'Muy rápida'},
+  fa:{settings:'تنظیمات',music:'موسیقی',sfx:'جلوه‌های صوتی',haptics:'بازخورد لمسی',shake:'لرزش صفحه',paddle:'راکت',follow:'دنبال کردن انگشت',drag:n=>`کشیدن ×${n}`,assist:'بازی با کمک',language:'زبان',auto:'خودکار',on:'روشن',off:'خاموش',reset:'بازنشانی پیشرفت',confirmReset:'برای تأیید دوباره بزنید',close:'بستن',progress:'پیشرفت',pause:'توقف',paused:'متوقف شد',resume:'ادامه',restart:'شروع دوباره',menu:'منو',launch:'پرتاب',next:'مرحله بعد',retry:'تلاش دوباره',levelN:n=>`مرحله ${n}`,levelStars:(n,s)=>`مرحله ${n}، ${s} از ۳ ستاره`,locked:n=>`مرحله ${n}، قفل`,score:'امتیاز',best:'بهترین',levelHud:'مرحله',tapLaunch:'برای پرتاب بزنید',combo:'کمبو x',congrats:'تبریک!',youWin:'بردید!',gameOver:'بازی تمام شد',allDone:'همه مراحل تمام شد!',sayStart:n=>`مرحله ${n}. برای پرتاب بزنید.`,sayLost:l=>`توپ از دست رفت. ${l} جان باقی است.`,sayWin:(s,c)=>`مرحله تمام شد. ${s} از ۳ ستاره. امتیاز ${c}.`,sayOver:c=>`بازی تمام شد. امتیاز ${c}.`,gameField:'زمین بازی',mute:'بی‌صدا',levels:'مراحل',livesN:n=>`${n} جان`,ballSpeed:'سرعت توپ',speedSlow:'آهسته',speedNormal:'معمولی',speedFast:'سریع',speedVeryFast:'خیلی سریع'},
 };
 const LANG_NAMES={en:'English',fr:'Français',de:'Deutsch',es:'Español',fa:'فارسی'},LANG_KEYS=['auto',...Object.keys(LANG_NAMES)];
 let lang='en';
@@ -229,7 +233,10 @@ const bg=document.getElementById('bg'),bctx=bg.getContext('2d');
 // Backing stores match the on-screen size in device pixels so bricks and text stay crisp at any scale.
 // Largest 340x600 box that fits the padded body. Computed, not read back from layout (no forced reflow).
 let scaleK=1;
-function fit(){const b=document.body;scaleK=Math.min(b.clientWidth/W,b.clientHeight/H)||1;wrap.style.width=W*scaleK+'px';
+function fit(){
+  // clientWidth/Height include the body's safe-area padding; size the box to what is inside it
+  const b=document.body,cs=globalThis.getComputedStyle?.(b),pad=k=>parseFloat(cs?.[k])||0;
+  scaleK=Math.min((b.clientWidth-pad('paddingLeft')-pad('paddingRight'))/W,(b.clientHeight-pad('paddingTop')-pad('paddingBottom'))/H)||1;wrap.style.width=W*scaleK+'px';
   const d=globalThis.devicePixelRatio||1,w=Math.round(W*scaleK*d)||W,h=Math.round(H*scaleK*d)||H;for(const[c,x]of[[cv,ctx],[bg,bctx]]){c.width=w;c.height=h;x.setTransform(w/W,0,0,h/H,0,0)}}
 fit();
 function paint(i){
@@ -241,10 +248,10 @@ function loadLevel(){
   const m=LEVELS[level];ROWS=m.length;grid=[];left=0;
   m.forEach((row,r)=>[...row].forEach((ch,c)=>{const hp=ch==='.'?0:ch==='#'?Infinity:+ch;grid[r*COLS+c]=hp;if(hp&&hp<Infinity)left++}));
   bctx.clearRect(0,0,W,H);for(let i=0;i<grid.length;i++)paint(i);
-  lives=3;score=0;base=SPEED+level;resetBall();hideCard();say(t('sayStart',level+1));wake();
+  lives=3;score=0;base=baseSpeed();resetBall();hideCard();say(t('sayStart',level+1));wake();
 }
 function resetBall(){
-  pows=[];pad.w=PAD_W;fx={pad:0,speed:0,fire:0};speed=base;
+  pows=[];pad.w=PAD_W;fx={pad:0,speed:0,fire:0};speed=base;combo=0;
   balls=[{x:pad.x+pad.w/2,y:pad.y-5,r:4,vx:0,vy:0,trail:[]}];state='ready';
 }
 function setSpeed(s){speed=s;for(const b of balls){const k=s/(Math.hypot(b.vx,b.vy)||1);b.vx*=k;b.vy*=k}}
@@ -269,9 +276,10 @@ const SFX={
   lose:()=>tone(200,60,.5,'sawtooth',.1),
   win:()=>[523,659,784,1047].forEach((f,i)=>tone(f,f,.25,'triangle',.1,ac.currentTime+i*.12)),
 };
+const audio=()=>{try{ac??=new AudioContext();ac.resume?.()}catch{}}; // music needs it even when effects are off
 function sfx(k){
   if(muted||!cfg.sfx)return;
-  try{ac??=new AudioContext();const now=performance.now();if(k==='hit'||k==='break'||k==='steel'){if(now-lastSfx<30)return;lastSfx=now}SFX[k]()}catch{}
+  try{audio();const now=performance.now();if(k==='hit'||k==='break'||k==='steel'){if(now-lastSfx<30)return;lastSfx=now}SFX[k]()}catch{}
 }
 // Music: 16-step bass + arp, scheduled 100ms ahead of the audio clock from the game loop.
 // Three bass/arp patterns; every 10 levels the pattern and key change and the tempo creeps up.
@@ -403,7 +411,7 @@ function draw(){
 }
 
 function tap(){
-  if(state==='ready'){const a=(.2+Math.random()*.4)*(Math.random()<.5?-1:1),b=balls[0];b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);state='play';sfx('paddle');try{navigator.wakeLock?.request('screen').catch(()=>{})}catch{}}
+  if(state==='ready'){const a=(.2+Math.random()*.4)*(Math.random()<.5?-1:1),b=balls[0];b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);state='play';audio();sfx('paddle');try{navigator.wakeLock?.request('screen').catch(()=>{})}catch{}}
 }
 const toXY=e=>{const r=cv.getBoundingClientRect(),k=W/r.width;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
 // Paddle control: follow the pointer, or (cfg.paddle > 0) move relative to the drag, scaled.
@@ -414,8 +422,9 @@ cv.addEventListener('pointerdown',e=>{
   lastPX=x;if(!(cfg.paddle>0))pad.x=x-pad.w/2;tap();
 });
 addEventListener('keydown',e=>{
-  keys[e.key]=1;if(dlg.open)return;
-  if(e.key===' '){e.preventDefault();cardKind?cBtns.firstChild?.click():tap()}
+  keys[e.key]=1;if(dlg.open||e.repeat)return;
+  if(e.key===' '){if(e.target?.closest?.('button'))return; // the focused button activates itself
+    e.preventDefault();cardKind?cBtns.firstChild?.click():tap()}
   else if(e.key==='p'||e.key==='Escape'){if(state==='pause')resume();else if(state==='play'||state==='ready')pause();else if(e.key==='Escape'&&cardKind)goMenu()}
   else if(e.key==='m')toggleMute();
 });
@@ -428,12 +437,15 @@ dlg.onclose=()=>{wrap.style.visibility=''};
 // Each setting is one full-width 44px button: role=switch for on/off, a cycling button for paddle mode and language.
 const PADS=[0,1,1.5,2],saveCfg=()=>{localStorage.bb_cfg=JSON.stringify(cfg)},optShow=[];
 const cycle=(list,v)=>list[(list.indexOf(v)+1)%list.length];
-$('opts').append(...['music','sfx','haptics','shake','paddle','assist','lang'].filter(k=>k!=='haptics'||inApp()).map(k=>{
+const CYCLES={paddle:PADS,speed:SPEED_KEYS,lang:LANG_KEYS},LABELS={lang:'language',speed:'ballSpeed'};
+$('opts').append(...['music','sfx','haptics','shake','speed','paddle','assist','lang'].filter(k=>k!=='haptics'||inApp()).map(k=>{
   const b=document.createElement('button');b.type='button';
-  const show=()=>{const v=cfg[k],name=t(k==='lang'?'language':k);
-    if(k==='paddle'||k==='lang'){const val=k==='paddle'?(v?t('drag',v):t('follow')):LANG_NAMES[v]||t('auto');b.innerHTML=`<span>${name}</span><b>${val}</b>`;b.setAttribute('aria-label',`${name}, ${val}`)}
+  const show=()=>{const v=cfg[k],name=t(LABELS[k]||k);
+    if(CYCLES[k]){const val=k==='paddle'?(v?t('drag',v):t('follow')):k==='speed'?t(SPEEDS[v]):LANG_NAMES[v]||t('auto');b.innerHTML=`<span>${name}</span><b>${val}</b>`;b.setAttribute('aria-label',`${name}, ${val}`)}
     else{b.setAttribute('role','switch');b.setAttribute('aria-checked',String(v));b.innerHTML=`<span>${name}</span><b class="${v?'':'off'}" aria-hidden="true">${t(v?'on':'off')}</b>`}};
-  b.onclick=()=>{cfg[k]=k==='paddle'?cycle(PADS,cfg[k]):k==='lang'?cycle(LANG_KEYS,cfg[k]):!cfg[k];saveCfg();k==='lang'?applyLang():show()};
+  b.onclick=()=>{cfg[k]=CYCLES[k]?cycle(CYCLES[k],cfg[k]):!cfg[k];saveCfg();
+    if(k==='speed'){base=baseSpeed();if(!(fx.speed>0))setSpeed(base)} // applies mid-level too
+    k==='lang'?applyLang():show()};
   optShow.push(show);show();return b;
 }));
 const resetBtn=document.getElementById('reset');let armed=0;
@@ -455,7 +467,7 @@ function applyLang(){
   const root=document.documentElement;root.lang=lang;root.dir=lang==='fa'?'rtl':'ltr';
   document.querySelectorAll('[data-t]').forEach(e=>{e.textContent=t(e.dataset.t)});
   document.querySelectorAll('[data-tl]').forEach(e=>e.setAttribute('aria-label',t(e.dataset.tl)));
-  optShow.forEach(f=>f());resetBtn.textContent=t('reset');hudLives=-1;
+  optShow.forEach(f=>f());clearTimeout(armed);armed=0;resetBtn.textContent=t('reset');hudLives=-1;
   if(state==='menu')goMenu();else if(cardKind)showCard(cardKind);else draw();
 }
 applyLang(); // first render: builds the menu in the right language

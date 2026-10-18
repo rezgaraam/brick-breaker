@@ -7,8 +7,9 @@ const noop=()=>{};
 const ctx2d=new Proxy({},{get:()=>noop,set:()=>true});
 const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,setAttribute:noop,getContext:()=>ctx2d,addEventListener:noop,getBoundingClientRect:()=>({left:0,top:0,width:340,height:600})};
 const g={document:{documentElement:{},addEventListener:noop,body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop,focus:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
-g.window=g; // browsers always have window; the bridge probes window.webkit
-vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N}',g);
+g.window=g;g.setTimeout=setTimeout;g.clearTimeout=clearTimeout;
+let audioCtxs=0;g.AudioContext=function(){audioCtxs++}; // a dummy: only counts creations // browsers always have window; the bridge probes window.webkit
+vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N}',g);
 const G=g.G,C=G.COLS,dt=1/60;
 assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 
@@ -43,6 +44,16 @@ G.resume();assert.equal(G.state,'play');G.update(dt);assert.notEqual(JSON.string
 // 5. Every language has exactly the English keys, with the same kinds (string vs function) and arity.
 const en=G.I18N.en,sig=o=>Object.keys(o).sort().map(k=>k+':'+(typeof o[k]==='function'?'f'+o[k].length:'s')).join();
 for(const[l,o]of Object.entries(G.I18N))assert.equal(sig(o),sig(en),`language ${l} keys differ from en`);
+
+// 6. Ball speed setting scales the launch speed.
+for(const m of[.75,1.5]){G.cfg.speed=m;G.level=10;G.loadLevel();G.tap();const b=G.balls[0];
+  assert(Math.abs(Math.hypot(b.vx,b.vy)-(280+10)*m)<1e-6,`speed x${m}: ${Math.hypot(b.vx,b.vy)}`)}
+G.cfg.speed=1;G.level=G.LEVELS.length-1;
+
+// 7. Review fixes: combo resets with a new ball; music's audio context starts even with effects off; plurals.
+G.combo=7;G.loadLevel();assert.equal(G.combo,0,'combo carried into a new level');
+G.cfg.sfx=false;G.ac=undefined;audioCtxs=0;G.loadLevel();G.tap();assert(audioCtxs===1&&G.ac,'no AudioContext when SFX is off (music would be silent)');G.cfg.sfx=true;
+assert.equal(G.I18N.en.livesN(1),'1 life');assert.equal(G.I18N.fr.livesN(1),'1 vie');assert.equal(G.I18N.es.sayLost(1),'Bola perdida. Queda 1 vida.');
 
 // 3. Assisted play wins the same level with no paddle input at all.
 G.cfg.assist=true;G.loadLevel();G.tap();
