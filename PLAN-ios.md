@@ -3,7 +3,8 @@
 ## Done
 
 SwiftUI shell + WKWebView around `index.html`, SwiftData progress store, native Progress sheet (5 languages),
-haptics, auto-pause on resign-active, package tests, UI tests + accessibility audits, App Store icon,
+haptics, auto-pause on resign-active, package tests, UI tests + accessibility audits, App Store icon (source
+`docs/icon.html`),
 automatic signing with a gitignored team file, `ios/run-device.sh`. Installed and played on an iPhone 17 Pro
 with a free personal team (7-day installs). See CLAUDE.md "iOS app".
 

@@ -99,8 +99,8 @@ phone with the team. Release steps are in `PLAN-ios.md`.
 - **Collision** is axis-separated (the standard tile-map method): balls move in <=3px substeps; `advance()` moves
   along x, and if the ball now overlaps a blocking cell (`overlapping()`, circle vs 5px cell) it undoes the x move
   and reflects vx; then the same along y. A ball can never end up inside a wall, and the 1px seams between wall
-  cells cannot act as surfaces. Touched cells are `strike()`n: steel only blocks, bricks crumble and block unless
-  the fireball is on. (Per-cell nearest-point normals were tried first and kept leaking balls into steel in rare
+  cells cannot act as surfaces. Touched cells still standing are struck (`strike()`): steel only blocks, bricks crumble and
+  block unless the fireball is on. (Per-cell nearest-point normals were tried first and kept leaking balls into steel in rare
   seeds, ~3 of 30.) test.js section 9 hammers the walls (fails if any ball centre enters steel or passes a side
   wall) and section 10 checks a ball can climb a canal without a seam turning it back.
 - **The rAF loop runs only while a level is on screen.** `loadLevel()` calls `wake()`; the loop stops itself
@@ -123,7 +123,7 @@ phone with the team. Release steps are in `PLAN-ios.md`.
   `update()` pauses while it is open. Reset progress is a two-tap button: web clears localStorage and reloads,
   the iOS shell receives `{type:'reset'}` and clears SwiftData, then reloads the page.
 - **Juice**: `jolt(n)` adds screen shake that `update()` decays (off under prefers-reduced-motion); each ball
-  carries a short `trail`; `combo` counts bricks since the last paddle hit, scales score and is drawn on the
+  carries a short `trail`; `combo` counts hits since the last paddle hit, scales score and is drawn on the
   playfield from 5 up. `burst()` throws confetti particles on a win (particles carry optional colour/size and draw above
   overlays). Music picks pattern and key from `SONGS` by level band (every 10 levels). Level 100 is a hand-built
   finale, special-cased where `LEVELS` is built.
@@ -148,7 +148,7 @@ Progress screen uses `ios/BrickBreaker/Localizable.xcstrings` (same five languag
 
 Everything a player taps outside the playfield is real HTML, never canvas-drawn: the level select (`goMenu()`
 renders 100 `<button>`s with labels like "Level 4, 2 of 3 stars" / "locked"; the next one to play gets class
-`next`), the icon chips at the bottom (mute with `aria-pressed` and settings on every screen, Progress on the iOS menu, pause
+`next`), the icon chips at the bottom (mute with `aria-pressed` and settings, a Lucide gear, on every screen, Progress on the iOS menu, pause
 during play; the user wants them visible while playing), the menu's "Play level N" button and
 star total, the title (an SVG drawn from bricks via `LOGO`, real text in a visually hidden span), the settings rows
 (44px `role=switch` buttons), the HUD (score, level, lives as `role=img` "3 lives") and the pause/win/over

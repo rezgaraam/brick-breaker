@@ -1,22 +1,24 @@
 # Brick Breaker
 
-A pixel-art Breakout game with 100 levels of dense brick fields sealed behind steel walls. The only way in is a canal: send the ball up it and break the field from the inside.
+A pixel-art Breakout game with 100 levels of dense brick fields sealed behind unbreakable steel walls. The only way in is a steel canal: send the ball up it, and every hit crumbles a chunk of bricks so the field caves in from the inside.
 
 **Play it now:** https://rezgaraam.github.io/brick-breaker/ (works offline; on iPhone, Safari → Share → Add to Home Screen)
 
 <p>
   <img src="docs/menu.png" width="240" alt="Level select with stars on cleared levels">
-  <img src="docs/ready.png" width="240" alt="A sealed brick field with a steel canal, paddle and ball">
+  <img src="docs/play.png" width="240" alt="A sealed brick field: the ball has gone up the steel canal and crumbled a cavity">
   <img src="docs/win.png" width="240" alt="Win card with two of three stars">
 </p>
 
 ## Features
 
-- 100 levels, generated from the level number: canal fields, inner steel rooms, bands, diamonds, and a hand-built finale
+- 100 levels, generated from the level number: canal fields, inner steel rooms, bands, diamonds, hand-drawn maps and a hand-built finale. Every level is sealed in a steel frame with at least one steel canal
+- Bricks crumble: a hit breaks every brick within 3 steps, but never through steel
 - Power-ups: multi-ball (x3, +3), wide paddle, fireball, slow ball, extra life, and two bad ones
 - Combo scoring, 1 to 3 stars per level, best score per level
 - Synthesized sound effects and music, no audio files
-- Pause (also automatic when you leave the app), settings, and an assisted play mode for players who can't steer
+- Pause (also automatic when you leave the app or get a call)
+- Settings: music, sound effects, haptics (iPhone), screen shake, ball speed, paddle control (follow finger or drag), assisted play for players who can't steer, language
 - English, French, German, Spanish and Persian
 - Accessible: real buttons for every control, VoiceOver labels, reduced-motion support
 - One `index.html`, no dependencies, no build step
@@ -46,7 +48,7 @@ A free Apple account works; the app then needs reinstalling every 7 days.
 
 | Command | Checks |
 |---|---|
-| `node test.js` | Every brick in all 100 levels is reachable by the ball, game rules, pause, assisted play, translation completeness |
+| `node test.js` | All 100 levels sealed with a canal and every brick reachable; balls never enter or pass steel (fireball included); canal seams; crumble; broken storage still loads; pause, assisted play, translations |
 | `node bench.js <chromium> "$PWD/index.html"` | No dropped frames on level 100 with 20 balls at 4x CPU throttle |
 | `node pwa-check.js <chromium> .` | Installable, cached, loads offline |
 | `ios/check.sh` | Swift package tests, simulator build, UI tests, Apple accessibility audits |
