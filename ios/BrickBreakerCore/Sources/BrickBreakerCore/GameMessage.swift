@@ -5,6 +5,7 @@ public enum GameMessage: Equatable {
     case levelDone(level: Int, stars: Int, score: Int)
     case haptic
     case stats
+    case reset
 
     /// Parses a `WKScriptMessage.body`. Anything malformed is dropped (`nil`), never trusted.
     public init?(body: Any) {
@@ -18,6 +19,7 @@ public enum GameMessage: Equatable {
             self = .levelDone(level: level, stars: stars, score: score)
         case "haptic": self = .haptic
         case "stats": self = .stats
+        case "reset": self = .reset
         default: return nil
         }
     }

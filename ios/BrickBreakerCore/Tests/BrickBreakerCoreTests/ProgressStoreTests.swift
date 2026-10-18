@@ -45,6 +45,7 @@ private func makeStore() throws -> ProgressStore {
     #expect(GameMessage(body: ["type": "level", "level": 3.0, "stars": 2.0, "score": 500.0]) == .levelDone(level: 3, stars: 2, score: 500)) // JS numbers arrive as doubles
     #expect(GameMessage(body: ["type": "haptic"]) == .haptic)
     #expect(GameMessage(body: ["type": "stats"]) == .stats)
+    #expect(GameMessage(body: ["type": "reset"]) == .reset)
     #expect(GameMessage(body: ["type": "level", "level": "3"]) == nil)
     #expect(GameMessage(body: ["type": "level", "level": -1, "stars": 2, "score": 5]) == nil)
     #expect(GameMessage(body: "hello") == nil)

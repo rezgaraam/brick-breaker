@@ -17,6 +17,9 @@ struct ContentView: View {
                 hapticTick &+= 1
             case .stats:
                 showStats = true
+            case .reset:
+                try? ProgressStore(context: context).reset()
+                reloadToken += 1
             }
         }
         .ignoresSafeArea()

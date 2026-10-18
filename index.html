@@ -15,9 +15,25 @@ body{display:flex;align-items:center;justify-content:center;box-sizing:border-bo
 #wrap{position:relative;width:min(100%,calc((100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))*340/600));aspect-ratio:340/600}
 canvas{display:block;width:100%;height:100%;background:#000}
 #wrap button{position:absolute;bottom:0;background:none;border:0;color:#aaa;font:12px monospace;padding:14px 10px;cursor:pointer}
-#mute{left:0}#stats{right:0}
+#mute{left:0}#settings{left:64px}#stats{right:0}
+dialog{background:#111;color:#ddd;border:1px solid #333;font:14px monospace;padding:16px 20px;min-width:220px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{margin:0 0 8px;font-size:16px;color:#5cb948}
+dialog label{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 0;min-height:28px}
+dialog button{font:inherit;padding:8px 12px;margin-top:10px;background:#222;color:#ddd;border:1px solid #444;cursor:pointer}
+dialog .danger{color:#f66;border-color:#733}
+[hidden]{display:none!important}
 </style>
-<div id="wrap"><canvas id="c"></canvas><button id="mute">♪ on</button><button id="stats" hidden>STATS</button></div>
+<div id="wrap"><canvas id="c"></canvas><button id="mute">♪ on</button><button id="settings" aria-label="Settings">⚙</button><button id="stats" hidden>STATS</button></div>
+<dialog id="cfg">
+  <h2>Settings</h2>
+  <label>Music <input type="checkbox" name="music"></label>
+  <label>Sound effects <input type="checkbox" name="sfx"></label>
+  <label id="hapRow">Haptics <input type="checkbox" name="haptics"></label>
+  <label>Screen shake <input type="checkbox" name="shake"></label>
+  <button id="reset" class="danger">Reset progress</button>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
 <script>
 'use strict';
 const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=340,H=600; // logical size; see fit()
@@ -143,11 +159,12 @@ const POWERS={
 },PK=Object.keys(POWERS);
 function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,trail:[],vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
 
+const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true},JSON.parse(localStorage.bb_cfg||'{}')),dlg=document.getElementById('cfg');
 let stars=JSON.parse(localStorage.bb_stars||'{}'),best=JSON.parse(localStorage.bb_best||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
 const unlocked=i=>i===0||stars[i-1]>0;
 // Native shell bridge (the iOS app). Every call is a no-op in a plain browser.
 const native=m=>{try{window.webkit?.messageHandlers?.game?.postMessage(m)}catch{}},inApp=()=>!!window.webkit?.messageHandlers?.game;
-let lastHap=0;function haptic(){try{const t=performance.now();if(t-lastHap<60)return;lastHap=t;native({type:'haptic'})}catch{}}
+let lastHap=0;function haptic(){try{if(!cfg.haptics)return;const t=performance.now();if(t-lastHap<60)return;lastHap=t;native({type:'haptic'})}catch{}}
 let grid=[],ROWS=0,left=0,balls=[],pows=[],parts=[],fx={pad:0,speed:0,fire:0},keys={};
 const pad={x:W/2-PAD_W/2,y:H-50,w:PAD_W,h:8};
 // Bricks live on an offscreen layer; a cell is repainted only when it changes.
@@ -178,7 +195,7 @@ function clampAngle(b){const s=Math.hypot(b.vx,b.vy),m=.3*s;if(Math.abs(b.vy)<m)
 let ac,muted=localStorage.bb_mute==='1',lastSfx=0,combo=0;
 // Screen shake: jolt() adds, update() decays. Off when the OS asks for reduced motion.
 let shake=0;const calm=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
-function jolt(n){if(!calm)shake=Math.min(8,shake+n)}
+function jolt(n){if(!calm&&cfg.shake)shake=Math.min(8,shake+n)}
 function tone(f0,f1,d,type='square',g0=.06,t=ac.currentTime){const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);g.gain.setValueAtTime(g0,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d)}
 function noise(d,g0=.08){const n=ac.sampleRate*d|0,buf=ac.createBuffer(1,n,ac.sampleRate),a=buf.getChannelData(0);for(let i=0;i<n;i++)a[i]=Math.random()*2-1;const s=ac.createBufferSource(),g=ac.createGain(),t=ac.currentTime;s.buffer=buf;g.gain.setValueAtTime(g0,t);g.gain.exponentialRampToValueAtTime(.001,t+d);s.connect(g).connect(ac.destination);s.start(t)}
 const SFX={
@@ -192,14 +209,14 @@ const SFX={
   win:()=>[523,659,784,1047].forEach((f,i)=>tone(f,f,.25,'triangle',.1,ac.currentTime+i*.12)),
 };
 function sfx(k){
-  if(muted)return;
+  if(muted||!cfg.sfx)return;
   try{ac??=new AudioContext();const now=performance.now();if(k==='hit'||k==='break'||k==='steel'){if(now-lastSfx<30)return;lastSfx=now}SFX[k]()}catch{}
 }
 // Music: 16-step bass + arp, scheduled 100ms ahead of the audio clock from the game loop.
 const BASS=[0,0,7,0,5,0,7,10,0,0,7,0,3,0,5,7],ARP=[12,15,19,24,15,19,24,27,12,15,19,22,15,19,22,27];
 let nextNote=0,step=0;
 function music(){
-  if(muted||!ac)return;
+  if(muted||!cfg.music||!ac)return;
   while(nextNote<ac.currentTime+.1){const t=Math.max(nextNote,ac.currentTime),f=110*2**(BASS[step]/12),a=f*2**(ARP[step]/12);tone(f,f,.12,'square',.03,t);tone(a,a,.08,'triangle',.02,t);nextNote=t+.125;step=(step+1)%16}
 }
 function toggleMute(){muted=!muted;localStorage.bb_mute=muted?'1':'0';muteBtn.textContent=muted?'♪ off':'♪ on'}
@@ -239,7 +256,7 @@ function collide(b){
 }
 
 function update(dt){
-  if(state==='menu')return;
+  if(state==='menu'||dlg.open)return; // settings dialog pauses the game
   shake=Math.max(0,shake-dt*30);
   pad.x+=((keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0))*400*dt;
   pad.x=Math.max(0,Math.min(W-pad.w,pad.x));
@@ -319,6 +336,15 @@ cv.addEventListener('pointerdown',e=>{
 addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')state='menu';if(e.key==='m')toggleMute()});
 addEventListener('keyup',e=>{keys[e.key]=0});
 muteBtn.onclick=toggleMute;statsBtn.onclick=()=>native({type:'stats'});
+// Settings dialog: toggles persist in localStorage; reset clears progress (through the shell on iOS).
+document.getElementById('settings').onclick=()=>dlg.showModal();
+document.querySelectorAll('#cfg input').forEach(i=>{i.checked=cfg[i.name];i.onchange=()=>{cfg[i.name]=i.checked;localStorage.bb_cfg=JSON.stringify(cfg)}});
+document.getElementById('hapRow').hidden=!inApp();
+const resetBtn=document.getElementById('reset');let armed=0;
+resetBtn.onclick=()=>{
+  if(!armed){resetBtn.textContent='Tap again to confirm';armed=setTimeout(()=>{armed=0;resetBtn.textContent='Reset progress'},3000);return}
+  clearTimeout(armed);if(inApp())native({type:'reset'});else{delete localStorage.bb_stars;delete localStorage.bb_best;location.reload()}
+};
 addEventListener('resize',()=>{fit();for(let i=0;i<grid.length;i++)paint(i)});
 
 let last=0;

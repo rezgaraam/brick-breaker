@@ -83,6 +83,9 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   `win` | `over`; `tap()` advances it, the top bar / Escape returns to `menu`. Timed effects live in
   `fx` (seconds left) and reset in `update()`. Ball speed is `base` = `SPEED` + level.
 - **Power-ups** are the `POWERS` table: label -> `[pill color, effect fn]`. Add one by adding a row.
+- **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake) behind a native `<dialog>`;
+  `update()` pauses while it is open. Reset progress is a two-tap button: web clears localStorage and reloads,
+  the iOS shell receives `{type:'reset'}` and clears SwiftData, then reloads the page.
 - **Juice**: `jolt(n)` adds screen shake that `update()` decays (off under prefers-reduced-motion); each ball
   carries a short `trail`; `combo` counts bricks since the last paddle hit, scales score and shows on the HUD
   from 5 up. Level 100 is a hand-built finale, special-cased where `LEVELS` is built.
