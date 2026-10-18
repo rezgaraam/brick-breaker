@@ -95,10 +95,13 @@ phone with the team. Release steps are in `PLAN-ios.md`.
 - **Coordinates are logical 340x600** (`W`, `H`). `fit()` sizes both canvases' backing stores to the
   on-screen size in device pixels and sets a transform, so game code never sees device pixels. The `#wrap`
   div fills the screen while keeping the aspect ratio; everything else (HUD, chips, cards, menu) is HTML on top.
-- **Collision**: balls move in <=3px substeps; `collide()` checks only the grid cells under the ball's
-  bounding box. `hit()` returns a contact normal only when the ball is moving *into* the rect, and
-  `bounce()` sets the sign of a velocity component rather than negating it, so a second overlap on the
-  next substep is a no-op instead of a double bounce.
+- **Collision**: balls move in <=3px substeps; `collide()` checks the grid cells under the ball's bounding box
+  and handles **every** touching cell (an early return after the first one let balls sink through steel when a
+  brick was touched in the same substep, especially with the fireball). `hit()` returns a contact normal only
+  when the ball is moving *into* the rect; a centre inside a rect reverses the dominant axis (safety net).
+  `bounce()` sets the sign of a velocity component rather than negating it, so a second overlap on the next
+  substep is a no-op instead of a double bounce. test.js section 9 hammers the walls with 20 balls, fireball
+  on and off, and fails if any ball centre enters steel or gets past a side wall.
 - **The rAF loop runs only while a level is on screen.** `loadLevel()` calls `wake()`; the loop stops itself
   when `state` becomes `menu` (the menu is static HTML). `fit()` computes `scaleK` instead of reading layout;
   use `scaleK` for logical-to-CSS-pixel conversion, never read element sizes per frame.

@@ -9,7 +9,7 @@ const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,set
 const g={document:{documentElement:{},addEventListener:noop,body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop,focus:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
 g.window=g;g.setTimeout=setTimeout;g.clearTimeout=clearTimeout;
 let audioCtxs=0;g.AudioContext=function(){audioCtxs++}; // a dummy: only counts creations // browsers always have window; the bridge probes window.webkit
-vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},get grid(){return grid},get fx(){return fx},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N}',g);
+vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},get grid(){return grid},get fx(){return fx},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N,split,P,GX,GY,set lives(v){lives=v}}',g);
 const G=g.G,C=G.COLS,dt=1/60;
 assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 
@@ -72,9 +72,21 @@ assert.equal(G.I18N.en.livesN(1),'1 life');assert.equal(G.I18N.fr.livesN(1),'1 v
  assert(s0>0&&steel()===s0,`steel changed: ${s0} -> ${steel()}`);assert(G.left<b0,'nothing was broken, test proves nothing');
  G.cfg.assist=false;G.level=G.LEVELS.length-1;}
 
+// 9. Walls hold: 20 balls hammering the walls for a minute of game time on 5 levels, fireball off and on. A ball
+//    whose centre gets inside a steel cell (it then slides through), or that gets past a side wall, fails the test.
+{const inSteel=b=>{const c=Math.floor((b.x-G.GX)/G.P),r=Math.floor((b.y-G.GY)/G.P);if(c<0||c>=C||r<0)return false;
+   const x=G.GX+c*G.P,y=G.GY+r*G.P;return G.grid[r*C+c]===Infinity&&b.x>x&&b.x<x+G.P-1&&b.y>y&&b.y<y+G.P-1};
+ let inside=0,out=0;
+ for(const fire of[false,true])for(const lv of[0,2,4,10,99]){
+   G.level=lv;G.cfg.assist=true;G.loadLevel();G.lives=999;G.tap();const bottom=G.GY+G.grid.length/C*G.P;
+   for(let f=0;f<60*60&&G.state==='play';f++){if(fire)G.fx.fire=9;while(G.balls.length&&G.balls.length<20)G.split(G.balls[0],3);G.update(dt);
+     for(const b of G.balls){if(inSteel(b))inside++;if(b.y>G.GY+12&&b.y<bottom-12&&(b.x<G.GX+12||b.x>G.GX+C*G.P-12))out++}}}
+ assert.equal(inside+out,0,`balls went into steel ${inside}x and past a side wall ${out}x`);
+ G.cfg.assist=false;G.level=G.LEVELS.length-1;}
+
 // 3. Assisted play wins the same level with no paddle input at all.
 G.cfg.assist=true;G.loadLevel();G.tap();
 for(let i=0;i<60*1200&&G.state==='play';i++)G.update(dt);
 assert.equal(G.state,'win',`assisted play: ${G.state} with ${G.left} bricks left`);
 G.cfg.assist=false;
-console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
+console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable + no tunnelling, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
