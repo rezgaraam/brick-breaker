@@ -104,6 +104,15 @@ const field=(rows,canals)=>seal(cells(make(rows,()=>'1')),canals);
 const canalsFor=(i,R,d,hMin,hSpan)=>{const n=1+(i/35|0),w=d.canal,slot=COLS/n;
   return Array.from({length:n},(_,k)=>[Math.min(COLS-6-w,Math.max(6,Math.round(slot*k+slot/2-w/2+(d.r()-.5)*6))),w,hMin+(d.r()*hSpan|0)])};
 const framed=m=>m.slice(0,2).every(row=>/^#+$/.test(row))&&m.every(row=>row.startsWith('##')&&row.endsWith('##'));
+// Can an 8px ball touch every breakable brick, entering from below? Flood-fills 2x2 windows of non-steel cells
+// (same rule as test.js, which keeps its own copy as an independent check). Used to reject canals that wall bricks in.
+function reachable(m){
+  const E='.'.repeat(COLS),rows=[E,E,...m,E,E],R=rows.length,open=(r,c)=>r>=0&&r<R&&c>=0&&c<COLS&&rows[r][c]!=='#';
+  const seen=new Uint8Array(R*COLS),hit=new Uint8Array(R*COLS+COLS+1),q=[R-2,0]; // flat arrays: runs at every launch
+  while(q.length){const c=q.pop(),r=q.pop(),k=r*COLS+c;if(r<0||r>=R||c<0||c>=COLS||seen[k]||!open(r,c)||!open(r,c+1)||!open(r+1,c)||!open(r+1,c+1))continue;
+    seen[k]=hit[k]=hit[k+1]=hit[k+COLS]=hit[k+COLS+1]=1;q.push(r+1,c,r-1,c,r,c+1,r,c-1)}
+  return rows.every((row,r)=>{for(let c=0;c<COLS;c++){const ch=row[c];if(ch!=='.'&&ch!=='#'&&!hit[r*COLS+c])return false}return true});
+}
 // Carve a steel room (cols 14-41, rows 4..R/3-ish) into a brick grid, door at the bottom centre.
 const room=(g,R)=>{const b=R-(R/3|0)-3;for(let r=4;r<b;r++)for(let c=14;c<42;c++)if(r<6||r>=b-2||c<16||c>=40)g[r][c]=r>=b-2&&c>=26&&c<30?'.':'#';return g};
 const TEMPLATES=[
@@ -194,9 +203,12 @@ const diff=i=>({rows:28+(36*i/99|0),two:.4*i/99,canal:i<30?4:3,r:rng(i+1)});
 const LEVELS=Array.from({length:100},(_,i)=>{
   const d=diff(i),m=i===99?join(room(cells(field(64,[[7,3,20],[27,3,14],[46,3,26]])),64)) // finale: tallest field, three canals, inner room
     :i%12===11?SET[(i/12|0)%SET.length]:TEMPLATES[i%TEMPLATES.length](i,d.rows,d);
-  // Holes/bands/diamond/hand-drawn get the wall too. Their openings are doorways through the 2-row bottom wall only
-  // (canal height 2): canal walls inside the field can close a gap to one brick row, too narrow for the 8px ball.
-  const sealed=framed(m)?m:seal(cells(m),canalsFor(i,m.length,d,2,1));
+  // Holes/bands/diamond/hand-drawn get the wall and real steel canals too. A canal's walls can close a gap in the
+  // pattern's own steel down to one brick row (too narrow for the 8px ball), so each try is checked with reachable()
+  // and re-rolled; a plain doorway is the last resort (test.js fails if any level ends up without a canal).
+  let sealed=framed(m)?m:null;
+  for(let k=0;!sealed&&k<16;k++){const c=seal(cells(m),canalsFor(i,m.length,d,8,Math.max(2,(m.length>>1)-8)));if(reachable(c))sealed=c}
+  sealed??=seal(cells(m),canalsFor(i,m.length,d,2,1));
   return sealed.map(row=>[...row].map(ch=>ch==='1'&&d.r()<d.two?'2':ch).join(''));
 });
 

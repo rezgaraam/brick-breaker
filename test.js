@@ -20,6 +20,12 @@ for(const [i,L] of G.LEVELS.entries()){
   // the grey steel wall: top 2 rows solid, 2 steel columns on both sides of every row, bottom 2 rows steel except canals
   assert(L.slice(0,2).every(r=>/^#+$/.test(r))&&L.every(r=>r.startsWith('##')&&r.endsWith('##')),`level ${i+1}: steel frame missing`);
   assert(L.slice(-2).every(r=>r.includes('#')&&r.includes('.')),`level ${i+1}: bottom wall has no canal`);
+  // a real canal: an opening in the bottom row whose steel walls run up at least 6 rows with an empty channel inside
+  const canalH=(()=>{let best=0;const last=L[L.length-1];
+    for(const m of last.matchAll(/\.+/g)){const c0=m.index,c1=c0+m[0].length-1;let h=0;
+      for(let r=L.length-1;r>=0&&L[r][c0-1]==='#'&&L[r][c1+1]==='#'&&!L[r].slice(c0,c1+1).includes('#');r--)h++;best=Math.max(best,h)}
+    return best})();
+  assert(canalH>=6,`level ${i+1}: no steel canal (tallest opening ${canalH} rows)`);
   const pad='.'.repeat(C),rows=[pad,pad,...L,pad,pad],R=rows.length,open=(r,c)=>r>=0&&r<R&&c>=0&&c<C&&rows[r][c]!=='#';
   const seen=new Set(),reached=new Set(),q=[[R-2,0]];
   while(q.length){const [r,c]=q.pop(),k=r*C+c;if(seen.has(k)||!open(r,c)||!open(r,c+1)||!open(r+1,c)||!open(r+1,c+1))continue;seen.add(k);for(const d of[k,k+1,k+C,k+C+1])reached.add(d);q.push([r+1,c],[r-1,c],[r,c+1],[r,c-1])}
