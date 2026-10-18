@@ -24,4 +24,27 @@ final class BrickBreakerUITests: XCTestCase {
         app.buttons["Done"].tap()
         XCTAssertTrue(app.navigationBars["Progress"].waitForNonExistence(timeout: 5))
     }
+
+    /// Assisted play is reachable without touching the playfield: switch it on, pick a level, press Launch.
+    @MainActor
+    func testAssistedPlayIsButtonDriven() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let gear = app.buttons["Settings"]
+        XCTAssertTrue(gear.waitForExistence(timeout: 10))
+        gear.tap()
+        let assist = app.switches["Assisted play"]
+        XCTAssertTrue(assist.waitForExistence(timeout: 5))
+        if assist.value as? String != "1" { assist.tap() }
+        app.buttons["Close"].tap()
+        app.buttons["Level 1"].tap()
+        let launch = app.buttons["Launch"]
+        XCTAssertTrue(launch.waitForExistence(timeout: 5), "Launch button not shown in assisted mode")
+        launch.tap()
+        XCTAssertTrue(launch.waitForNonExistence(timeout: 5), "game did not start")
+        sleep(5)
+        XCTAssertFalse(app.buttons["Retry"].exists, "assisted paddle lost every ball within 5s")
+        // leave the default state for other tests
+        app.buttons["MENU"].tap(); gear.tap(); assist.tap(); app.buttons["Close"].tap()
+    }
 }

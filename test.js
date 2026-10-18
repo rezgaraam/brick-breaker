@@ -8,7 +8,7 @@ const ctx2d=new Proxy({},{get:()=>noop,set:()=>true});
 const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,getContext:()=>ctx2d,addEventListener:noop,getBoundingClientRect:()=>({left:0,top:0,width:340,height:600})};
 const g={document:{body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
 g.window=g; // browsers always have window; the bridge probes window.webkit
-vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS}',g);
+vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg}',g);
 const G=g.G,C=G.COLS,dt=1/60;
 assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 
@@ -34,4 +34,9 @@ assert.equal(G.left,0);assert(G.stars[G.LEVELS.length-1]>=1,'stars saved on win'
 G.loadLevel();G.tap();
 for(let n=3;n>0;n--){for(let i=0;i<60*20&&G.lives===n;i++){G.pad.x=-999;G.pad.w=1;G.update(dt)}if(G.lives>0){assert.equal(G.state,'ready');G.tap()}}
 assert.equal(G.state,'over');
-console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, won a ${total}-brick level, lives drain to game over`);
+// 3. Assisted play wins the same level with no paddle input at all.
+G.cfg.assist=true;G.loadLevel();G.tap();
+for(let i=0;i<60*1200&&G.state==='play';i++)G.update(dt);
+assert.equal(G.state,'win',`assisted play: ${G.state} with ${G.left} bricks left`);
+G.cfg.assist=false;
+console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, assisted play wins, won a ${total}-brick level, lives drain to game over`);

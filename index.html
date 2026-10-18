@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Brick Breaker: 100 levels of dense pixel brick fields with steel canals. Plays offline, no ads.">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -10,12 +11,12 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Brick Breaker</title>
 <style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;overscroll-behavior:none}
+html,body{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none}
 body{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #wrap{position:relative;width:100%;max-width:100%;aspect-ratio:340/600;container-type:inline-size} /* width is set by fit(); cqw = 1% of it */
-canvas{position:absolute;inset:0;width:100%;height:100%}#bg{background:#000}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none} /* only the playfield blocks pinch-zoom */#bg{background:#000}
 #wrap button{position:absolute;bottom:0;background:none;border:0;color:#aaa;font:12px monospace;padding:14px 10px;cursor:pointer}
-#mute{left:0}#settings{left:64px}#stats,#home{right:0}
+#mute{left:0}#settings{left:64px}#stats,#home{right:0}#go{left:50%;transform:translateX(-50%);color:#fff;font-size:14px}
 /* Level select is real HTML (VoiceOver, keyboard, hit testing); sizes in cqw mirror the 340-wide logical canvas. */
 #menu{position:absolute;inset:0;background:#000;text-align:center;font-family:monospace}
 #menu h1{position:absolute;top:3.3%;width:100%;margin:0;font-size:7cqw;color:#5cb948}
@@ -35,7 +36,7 @@ dialog .danger{color:#f66;border-color:#733}
 </style>
 <div id="wrap"><canvas id="bg" aria-hidden="true"></canvas><canvas id="c" role="img" aria-label="Game field"></canvas>
   <div id="menu"><h1>BRICK BREAKER</h1><div id="levels" role="group" aria-label="Levels"></div></div>
-  <button id="mute">♪ on</button><button id="settings" aria-label="Settings">⚙</button><button id="stats" hidden>STATS</button><button id="home" hidden>MENU</button>
+  <button id="mute">♪ on</button><button id="settings" aria-label="Settings">⚙</button><button id="stats" hidden>STATS</button><button id="home" hidden>MENU</button><button id="go" hidden></button>
   <p id="say" class="sr" aria-live="polite"></p></div>
 <dialog id="cfg">
   <h2>Settings</h2>
@@ -169,7 +170,7 @@ const POWERS={
 },PK=Object.keys(POWERS);
 function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,trail:[],vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
 
-const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true,paddle:0},JSON.parse(localStorage.bb_cfg||'{}')),dlg=document.getElementById('cfg');
+const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true,paddle:0,assist:false},JSON.parse(localStorage.bb_cfg||'{}')),dlg=document.getElementById('cfg');
 let stars=JSON.parse(localStorage.bb_stars||'{}'),best=JSON.parse(localStorage.bb_best||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
 const unlocked=i=>i===0||stars[i-1]>0;
 // Native shell bridge (the iOS app). Every call is a no-op in a plain browser.
@@ -182,8 +183,10 @@ const pad={x:W/2-PAD_W/2,y:H-50,w:PAD_W,h:8};
 // frame). The browser composites them; copying the full-res brick layer every frame was the frame-time bottleneck.
 const bg=document.getElementById('bg'),bctx=bg.getContext('2d');
 // Backing stores match the on-screen size in device pixels so bricks and text stay crisp at any scale.
-function fit(){const b=document.body;wrap.style.width=W*Math.min(b.clientWidth/W,b.clientHeight/H)+'px'; // largest 340x600 box that fits the padded body
-  const r=cv.getBoundingClientRect(),d=globalThis.devicePixelRatio||1,w=Math.round(r.width*d)||W,h=Math.round(r.height*d)||H;for(const[c,x]of[[cv,ctx],[bg,bctx]]){c.width=w;c.height=h;x.setTransform(w/W,0,0,h/H,0,0)}}
+// Largest 340x600 box that fits the padded body. Computed, not read back from layout (no forced reflow).
+let scaleK=1;
+function fit(){const b=document.body;scaleK=Math.min(b.clientWidth/W,b.clientHeight/H)||1;wrap.style.width=W*scaleK+'px';
+  const d=globalThis.devicePixelRatio||1,w=Math.round(W*scaleK*d)||W,h=Math.round(H*scaleK*d)||H;for(const[c,x]of[[cv,ctx],[bg,bctx]]){c.width=w;c.height=h;x.setTransform(w/W,0,0,h/H,0,0)}}
 fit();
 function paint(i){
   const x=GX+i%COLS*P,y=GY+(i/COLS|0)*P,hp=grid[i];
@@ -194,7 +197,7 @@ function loadLevel(){
   const m=LEVELS[level];ROWS=m.length;grid=[];left=0;
   m.forEach((row,r)=>[...row].forEach((ch,c)=>{const hp=ch==='.'?0:ch==='#'?Infinity:+ch;grid[r*COLS+c]=hp;if(hp&&hp<Infinity)left++}));
   bctx.clearRect(0,0,W,H);for(let i=0;i<grid.length;i++)paint(i);
-  lives=3;score=0;base=SPEED+level;resetBall();say(`Level ${level+1}. Tap to launch.`);
+  lives=3;score=0;base=SPEED+level;resetBall();say(`Level ${level+1}. Tap to launch.`);wake();
 }
 function resetBall(){
   pows=[];pad.w=PAD_W;fx={pad:0,speed:0,fire:0};speed=base;
@@ -256,7 +259,7 @@ function collide(b){
   if(b.vy>0&&b.y+b.r>=pad.y&&b.y<pad.y+pad.h&&b.x>pad.x-b.r&&b.x<pad.x+pad.w+b.r){
     const rel=Math.max(-1,Math.min(1,(b.x-pad.x-pad.w/2)/(pad.w/2)));
     const a=(rel<0?-1:1)*Math.max(.07,Math.abs(rel))*Math.PI/3; // 4°..60° off vertical, never dead straight
-    b.y=pad.y-b.r;b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);combo=0;sfx('paddle');
+    b.y=pad.y-b.r;b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);combo=0;assistOff=(Math.random()-.5)*.8;sfx('paddle');
   }
   // Only the grid cells under the ball's bounding box can be touching it.
   const c0=Math.max(0,(b.x-b.r-GX)/P|0),c1=Math.min(COLS-1,(b.x+b.r-GX)/P|0),r0=Math.max(0,(b.y-b.r-GY)/P|0),r1=Math.min(ROWS-1,(b.y+b.r-GY)/P|0);
@@ -275,8 +278,16 @@ function collide(b){
   }
 }
 
+// Assisted play: the paddle follows the lowest falling ball; the offset is re-rolled on each paddle hit so the
+// bounce angle varies (a dead-centre paddle can loop forever). The player only launches and continues.
+let assistOff=0;
+function assist(){
+  let t=null;for(const b of balls)if(b.vy>0&&(!t||b.y>t.y))t=b;
+  if(t)pad.x=t.x-pad.w/2+assistOff*pad.w;
+}
 function update(dt){
   if(state==='menu'||dlg.open)return; // settings dialog pauses the game
+  if(cfg.assist&&state==='play')assist();
   shake=Math.max(0,shake-dt*30);
   pad.x+=((keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0))*400*dt;
   pad.x=Math.max(0,Math.min(W-pad.w,pad.x));
@@ -303,14 +314,17 @@ function goMenu(){
     b.setAttribute('aria-label',ok?`Level ${i+1}`+(n?`, ${n} of 3 stars`:''):`Level ${i+1}, locked`);
     b.onclick=()=>{level=i;loadLevel()};return b;
   }));
+  draw(); // one frame to set the menu's button visibility; the loop is stopped here
 }
+const GO={ready:'Launch',win:'Next level',over:'Retry'},goBtn=$('go');
 function draw(){
   wrap.style.visibility=dlg.open?'hidden':''; // nothing half-visible behind the modal settings dialog
+  const g=cfg.assist&&GO[state]||'';goBtn.hidden=!g;if(g&&goBtn.textContent!==g)goBtn.textContent=g;
   menuEl.hidden=state!=='menu';homeBtn.hidden=state==='menu';
   statsBtn.hidden=!(inApp()&&state==='menu');
   if(state==='menu')return;
   ctx.clearRect(0,0,W,H);
-  const sx=shake>0?(Math.random()-.5)*shake:0,sy=shake>0?(Math.random()-.5)*shake:0,k=wrap.clientWidth/W;
+  const sx=shake>0?(Math.random()-.5)*shake:0,sy=shake>0?(Math.random()-.5)*shake:0,k=scaleK;
   ctx.save();ctx.translate(sx,sy);bg.style.transform=sx||sy?`translate(${sx*k}px,${sy*k}px)`:'';
   ctx.fillStyle='#f27b55';ctx.fillRect(pad.x,pad.y,pad.w,pad.h);
   ctx.fillStyle=fx.fire>0?'#f63':'#fff';
@@ -355,12 +369,12 @@ cv.addEventListener('pointerdown',e=>{
 });
 addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')goMenu();if(e.key==='m')toggleMute()});
 addEventListener('keyup',e=>{keys[e.key]=0});
-muteBtn.onclick=toggleMute;homeBtn.onclick=goMenu;statsBtn.onclick=()=>native({type:'stats'});
+muteBtn.onclick=toggleMute;homeBtn.onclick=goMenu;goBtn.onclick=()=>tap();statsBtn.onclick=()=>native({type:'stats'});
 // Settings dialog: toggles persist in localStorage; reset clears progress (through the shell on iOS).
 document.getElementById('settings').onclick=()=>dlg.showModal();
 // Each setting is one full-width 44px button: role=switch for on/off, a cycling button for the paddle mode.
 const PADS={0:'Follow finger',1:'Drag 1x',1.5:'Drag 1.5x',2:'Drag 2x'},saveCfg=()=>{localStorage.bb_cfg=JSON.stringify(cfg)};
-$('opts').append(...[['music','Music'],['sfx','Sound effects'],['haptics','Haptics'],['shake','Screen shake'],['paddle','Paddle']]
+$('opts').append(...[['music','Music'],['sfx','Sound effects'],['haptics','Haptics'],['shake','Screen shake'],['paddle','Paddle'],['assist','Assisted play']]
   .filter(([k])=>k!=='haptics'||inApp()).map(([k,name])=>{
     const b=document.createElement('button');b.type='button';
     const show=()=>{const v=cfg[k];if(k==='paddle'){b.innerHTML=`${name}<b>${PADS[v]}</b>`;b.setAttribute('aria-label',`Paddle control, ${PADS[v]}`)}
@@ -376,8 +390,11 @@ resetBtn.onclick=()=>{
 addEventListener('resize',()=>{fit();for(let i=0;i<grid.length;i++)paint(i)});
 
 let last=0;
-function loop(t){const dt=Math.min((t-last)/1000,1/30);last=t;update(dt);draw();requestAnimationFrame(loop)}
-goMenu();requestAnimationFrame(loop);
+// The loop only runs while a level is on screen; the menu is static HTML, so it stops there (battery).
+let running=false;
+function loop(t){const dt=last?Math.min((t-last)/1000,1/30):0;last=t;update(dt);draw();if(state==='menu'){running=false;return}requestAnimationFrame(loop)}
+function wake(){if(!running){running=true;last=0;requestAnimationFrame(loop)}}
+goMenu();
 try{navigator.serviceWorker?.register('sw.js')}catch{}
 </script>
 </html>

@@ -82,6 +82,9 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   bounding box. `hit()` returns a contact normal only when the ball is moving *into* the rect, and
   `bounce()` sets the sign of a velocity component rather than negating it, so a second overlap on the
   next substep is a no-op instead of a double bounce.
+- **The rAF loop runs only while a level is on screen.** `loadLevel()` calls `wake()`; the loop stops itself
+  when `state` becomes `menu` (the menu is static HTML). `fit()` computes `scaleK` instead of reading layout;
+  use `scaleK` for logical-to-CSS-pixel conversion, never read element sizes per frame.
 - **Game state** is a string: `menu` (level select) -> `ready` (ball riding the paddle) -> `play` ->
   `win` | `over`; `tap()` advances it, `goMenu()` (MENU button, Escape) returns to `menu`. Timed effects live in
   `fx` (seconds left) and reset in `update()`. Ball speed is `base` = `SPEED` + level.
@@ -107,8 +110,10 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
 Everything a player taps outside the playfield is real HTML, never canvas-drawn: the level select (`goMenu()`
 renders 100 `<button>`s with labels like "Level 4, 2 of 3 stars" / "locked"), mute, settings, STATS, MENU,
 and the settings rows (44px `role=switch` buttons). Sizes use `cqw` so they track the canvas scale. Game
-events are announced through the `say()` aria-live region. The playfield itself is a canvas and is not
-playable with VoiceOver. `AccessibilityAuditTests` runs Apple's `performAccessibilityAudit` on the menu,
+events are announced through the `say()` aria-live region. The playfield is a canvas; **Assisted play**
+(`cfg.assist`) makes it playable without steering: `assist()` moves the paddle under the lowest falling ball,
+and a visible Launch / Next level / Retry button (`#go`) replaces tapping the field. Pinch-zoom is allowed
+everywhere except the canvases (`touch-action:none` only there). `AccessibilityAuditTests` runs Apple's `performAccessibilityAudit` on the menu,
 settings and stats screens; it must stay at zero findings. The only accepted issue (system toolbar buttons
 and Dynamic Type) is filtered in the test with its reason; never filter by skipping audit types.
 
