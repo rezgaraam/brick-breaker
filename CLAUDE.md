@@ -12,7 +12,9 @@ The look it copies: a dense 56-column grid of 5px bricks, a sealed gray steel fr
 
 ```bash
 open index.html        # run: no server needed, reload the tab after edits
-node test.js           # the only test: DOM-stubbed smoke test, ~5s, exits non-zero on failure
+node test.js           # the main test: DOM-stubbed smoke test, ~5s, exits non-zero on failure
+python3 -m http.server 8000   # needed only to exercise the service worker (no SW on file://)
+node pwa-check.js "$CHROMIUM" .   # PWA check: manifest, SW install, offline reload (see file header)
 ```
 
 Headless render of a given level (Playwright's cached Chromium, no npm package needed):
@@ -22,6 +24,14 @@ BIN=~/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-she
 sed 's/let level=Math.min(+localStorage.bb_level||0,LEVELS.length-1)/let level=1/' index.html > /tmp/lvl.html
 $BIN --headless --disable-gpu --hide-scrollbars --window-size=340,600 --virtual-time-budget=500 --screenshot=/tmp/lvl.png file:///tmp/lvl.html
 ```
+
+## Web app files
+
+The repo root is the site (GitHub Pages from `master`, `.nojekyll` present). `manifest.webmanifest` +
+`icon-192.png`/`icon-512.png` make it installable; `sw.js` is a network-first cache, so a deploy shows on
+the next load with no version bump, and the cache only answers when the network fails. Bump `CACHE` in
+`sw.js` only when its `FILES` list changes. Registration and the screen wake lock in `index.html` are
+behind `?.` and try/catch so `file://` and the headless test stay quiet.
 
 ## Architecture (all in index.html, read top to bottom)
 
