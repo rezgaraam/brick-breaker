@@ -13,7 +13,7 @@
 html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;overscroll-behavior:none}
 body{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #wrap{position:relative;width:100%;max-width:100%;aspect-ratio:340/600;container-type:inline-size} /* width is set by fit(); cqw = 1% of it */
-canvas{display:block;width:100%;height:100%;background:#000}
+canvas{position:absolute;inset:0;width:100%;height:100%}#bg{background:#000}
 #wrap button{position:absolute;bottom:0;background:none;border:0;color:#aaa;font:12px monospace;padding:14px 10px;cursor:pointer}
 #mute{left:0}#settings{left:64px}#stats,#home{right:0}
 /* Level select is real HTML (VoiceOver, keyboard, hit testing); sizes in cqw mirror the 340-wide logical canvas. */
@@ -33,7 +33,7 @@ dialog button{font:inherit;padding:8px 12px;margin-top:10px;background:#222;colo
 dialog .danger{color:#f66;border-color:#733}
 [hidden]{display:none!important}
 </style>
-<div id="wrap"><canvas id="c" role="img" aria-label="Game field"></canvas>
+<div id="wrap"><canvas id="bg" aria-hidden="true"></canvas><canvas id="c" role="img" aria-label="Game field"></canvas>
   <div id="menu"><h1>BRICK BREAKER</h1><div id="levels" role="group" aria-label="Levels"></div></div>
   <button id="mute">♪ on</button><button id="settings" aria-label="Settings">⚙</button><button id="stats" hidden>STATS</button><button id="home" hidden>MENU</button>
   <p id="say" class="sr" aria-live="polite"></p></div>
@@ -178,7 +178,9 @@ let lastHap=0;function haptic(){try{if(!cfg.haptics)return;const t=performance.n
 let grid=[],ROWS=0,left=0,balls=[],pows=[],parts=[],fx={pad:0,speed:0,fire:0},keys={};
 const pad={x:W/2-PAD_W/2,y:H-50,w:PAD_W,h:8};
 // Bricks live on an offscreen layer; a cell is repainted only when it changes.
-const bg=document.createElement('canvas'),bctx=bg.getContext('2d');
+// Two stacked canvases: bricks on #bg (repainted per changed cell), everything that moves on #c (cleared each
+// frame). The browser composites them; copying the full-res brick layer every frame was the frame-time bottleneck.
+const bg=document.getElementById('bg'),bctx=bg.getContext('2d');
 // Backing stores match the on-screen size in device pixels so bricks and text stay crisp at any scale.
 function fit(){const b=document.body;wrap.style.width=W*Math.min(b.clientWidth/W,b.clientHeight/H)+'px'; // largest 340x600 box that fits the padded body
   const r=cv.getBoundingClientRect(),d=globalThis.devicePixelRatio||1,w=Math.round(r.width*d)||W,h=Math.round(r.height*d)||H;for(const[c,x]of[[cv,ctx],[bg,bctx]]){c.width=w;c.height=h;x.setTransform(w/W,0,0,h/H,0,0)}}
@@ -307,9 +309,9 @@ function draw(){
   menuEl.hidden=state!=='menu';homeBtn.hidden=state==='menu';
   statsBtn.hidden=!(inApp()&&state==='menu');
   if(state==='menu')return;
-  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
-  ctx.save();if(shake>0)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
-  ctx.drawImage(bg,0,0,W,H);
+  ctx.clearRect(0,0,W,H);
+  const sx=shake>0?(Math.random()-.5)*shake:0,sy=shake>0?(Math.random()-.5)*shake:0,k=wrap.clientWidth/W;
+  ctx.save();ctx.translate(sx,sy);bg.style.transform=sx||sy?`translate(${sx*k}px,${sy*k}px)`:'';
   ctx.fillStyle='#f27b55';ctx.fillRect(pad.x,pad.y,pad.w,pad.h);
   ctx.fillStyle=fx.fire>0?'#f63':'#fff';
   for(const b of balls)b.trail.forEach((t,i)=>{ctx.globalAlpha=(i+1)/b.trail.length*.35;ctx.beginPath();ctx.arc(t.x,t.y,b.r*(i+1)/b.trail.length,0,7);ctx.fill()});

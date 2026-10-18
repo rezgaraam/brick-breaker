@@ -15,6 +15,7 @@ open index.html        # run: no server needed, reload the tab after edits
 node test.js           # the main test: DOM-stubbed smoke test, ~5s, exits non-zero on failure
 python3 -m http.server 8000   # needed only to exercise the service worker (no SW on file://)
 node pwa-check.js "$CHROMIUM" .   # PWA check: manifest, SW install, offline reload (see file header)
+node bench.js "$CHROMIUM" "$PWD/index.html"   # frame-time check: level 100, 20 balls, 3x DPR, 4x CPU throttle
 ios/check.sh                      # iOS: package tests (swift test) + simulator build (+ UI test if a sim is booted)
 ```
 
@@ -69,8 +70,10 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   so re-run `node test.js` (it validates all 100) and render a few.
 - **Grid state** is a flat array `grid[r*COLS+c]` of hp numbers (0 empty). `left` counts breakable bricks
   and drives the win check, so anything that removes a brick must decrement it.
-- **Bricks are drawn once** onto the offscreen canvas `bg`; `paint(i)` repaints a single cell. Every
-  frame only blits `bg` then draws balls, paddle, pills, particles, HUD. Never draw bricks per frame.
+- **Two stacked canvases.** Bricks live on `#bg`; `paint(i)` repaints a single cell when it changes. `#c` sits
+  on top, is cleared every frame and holds only what moves (balls, paddle, pills, particles, HUD). Shake moves
+  `#bg` with a CSS transform. Never draw or copy the brick layer per frame: blitting it at 3x DPR was measured
+  as the frame-time bottleneck (38-56ms frames at 4-6x CPU throttle vs 17-18ms after the split).
 - **Coordinates are logical 340x600** (`W`, `H`). `fit()` sizes both canvases' backing stores to the
   on-screen size in device pixels and sets a transform, so game code never sees device pixels. The `#wrap`
   div fills the screen while keeping the aspect ratio; mute and STATS are real HTML buttons on top of the
