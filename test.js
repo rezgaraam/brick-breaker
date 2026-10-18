@@ -6,9 +6,10 @@ const src=fs.readFileSync(__dirname+'/index.html','utf8').match(/<script>([\s\S]
 const noop=()=>{};
 const ctx2d=new Proxy({},{get:()=>noop,set:()=>true});
 const canvas={width:340,height:600,getContext:()=>ctx2d,addEventListener:noop,getBoundingClientRect:()=>({left:0,width:340})};
-const g={document:{getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d})},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array};
-vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS}',g);
+const g={document:{getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d})},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
+vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS}',g);
 const G=g.G,C=G.COLS,dt=1/60;
+assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 
 // 0. Every level has COLS columns, and every breakable brick can be reached from below by
 //    an 8px ball: flood-fill 2x2 windows of non-steel cells (one 5px cell is too narrow).
@@ -26,10 +27,10 @@ const total=G.left;assert.equal(total,4*C);
 G.tap();assert.equal(G.state,'play');
 for(let i=0;i<60*1200&&G.state==='play';i++){G.pad.x=G.balls[0].x-G.pad.w/2+(Math.random()-.5)*G.pad.w*.8;G.update(dt)}
 assert.equal(G.state,'win',`expected win, got ${G.state} with ${G.left}/${total} bricks left`);
-assert.equal(G.left,0);
+assert.equal(G.left,0);assert(G.stars[G.LEVELS.length-1]>=1,'stars saved on win');
 
 // 2. Dropping the ball costs a life, then game over at 0.
 G.loadLevel();G.tap();
 for(let n=3;n>0;n--){for(let i=0;i<60*20&&G.lives===n;i++){G.pad.x=-999;G.pad.w=1;G.update(dt)}if(G.lives>0){assert.equal(G.state,'ready');G.tap()}}
 assert.equal(G.state,'over');
-console.log(`ok: ${G.LEVELS.length-1} levels valid, won a ${total}-brick level, lives drain to game over`);
+console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, won a ${total}-brick level, lives drain to game over`);

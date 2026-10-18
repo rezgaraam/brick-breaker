@@ -14,20 +14,33 @@ const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=cv.width,H=cv.he
 const COLS=56,P=6,GX=2,GY=22,PAD_W=60,SPEED=280,MAX_BALLS=20;
 
 // Level maps: . empty, 1 green, 2 two-hit, # steel (unbreakable). 56 columns of 5px bricks.
-// field(): a sealed steel frame packed with bricks. The only way in is a canal, a steel-walled
-// channel open at the bottom edge; the ball flies up it and eats the field from inside.
+// 100 levels are generated deterministically from the level number: 5 templates in rotation,
+// every 12th level a hand-drawn set piece, difficulty (rows, two-hit share, canal width) from the index.
+const rng=s=>()=>{s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const make=(rows,f)=>Array.from({length:rows},(_,r)=>Array.from({length:COLS},(_,c)=>f(r,c)).join(''));
+const cells=m=>m.map(s=>[...s]),join=g=>g.map(r=>r.join(''));
+// Sealed steel frame packed with bricks. The only way in is a canal, a steel-walled channel open at
+// the bottom edge; the ball flies up it and eats the field from inside. canals: [col, width, height].
 function field(rows,canals){
-  const g=Array.from({length:rows},(_,r)=>Array.from({length:COLS},(_,c)=>r<2||r>=rows-2||c<2||c>=COLS-2?'#':'1'));
+  const g=cells(make(rows,(r,c)=>r<2||r>=rows-2||c<2||c>=COLS-2?'#':'1'));
   for(const[c0,w,h]of canals)for(let r=rows-h;r<rows;r++)for(let c=c0-2;c<c0+w+2;c++)g[r][c]=c<c0||c>=c0+w?'#':'.';
-  return g.map(r=>r.join(''));
+  return join(g);
 }
+const TEMPLATES=[
+  // 1-3 canals, more as levels go up, random heights
+  (i,R,d)=>{const n=1+(i/35|0),w=d.canal,slot=COLS/n;return field(R,Array.from({length:n},(_,k)=>[Math.min(COLS-6-w,Math.max(6,Math.round(slot*k+slot/2-w/2+(d.r()-.5)*6))),w,8+(d.r()*(R-16)|0)]))}, // keep >=2 brick columns between a wall and the frame
+  // solid block with random holes punched out
+  (i,R,d)=>{const g=cells(make(R,()=>'1'));for(let k=0;k<4+i/5;k++){const h=2+(d.r()*3|0),w=2+(d.r()*5|0),r0=d.r()*(R-h)|0,c0=d.r()*(COLS-w)|0;for(let r=r0;r<r0+h;r++)for(let c=c0;c<c0+w;c++)g[r][c]='.'}return join(g)},
+  // brick bands separated by staggered steel rows with gaps
+  (i,R,d)=>{const off=d.r()<.5?0:4;return make(R,(r,c)=>r%8===7?((c+off+(r/8|0)*4)%8<4?'#':'.'):'1')},
+  // a canal field with an inner steel room whose only door is at its bottom
+  (i,R,d)=>{const g=cells(field(R,[[26,d.canal,R/3|0]])),b=R-(R/3|0)-3;for(let r=4;r<b;r++)for(let c=14;c<42;c++)if(r<6||r>=b-2||c<16||c>=40)g[r][c]=r>=b-2&&c>=26&&c<30?'.':'#';return join(g)},
+  // diamond with a two-hit core
+  (i,R,d)=>make(R,(r,c)=>{const k=Math.abs(c-27.5)/27.5+Math.abs(r-(R-1)/2)/((R-1)/2);return k>1?'.':k>.5?'1':'2'}),
+];
 // Hand-drawn 14-column maps, scaled 4x onto the 56-column grid.
 const scale=m=>m.trim().split('\n').flatMap(r=>Array(4).fill([...r].map(ch=>ch.repeat(4)).join('')));
-const LEVELS=[
-  field(44,[[26,4,14]]),
-  field(56,[[27,3,16]]),
-  field(56,[[12,3,22],[41,3,12]]),
-  ...[`
+const SET=[`
 11111111111111
 11111111111111
 11111111111111
@@ -96,8 +109,12 @@ const LEVELS=[
 11111111#..#11
 11111111#..#11`,`
 22222222222222
-${'11111111111111\n'.repeat(14)}22222222222222`].map(scale),
-];
+${'11111111111111\n'.repeat(14)}22222222222222`].map(scale);
+const diff=i=>({rows:28+(36*i/99|0),two:.4*i/99,canal:i<30?4:3,r:rng(i+1)});
+const LEVELS=Array.from({length:100},(_,i)=>{
+  const d=diff(i),m=i%12===11?SET[(i/12|0)%SET.length]:TEMPLATES[i%TEMPLATES.length](i,d.rows,d);
+  return m.map(row=>[...row].map(ch=>ch==='1'&&d.r()<d.two?'2':ch).join(''));
+});
 
 // Power-ups: label -> [pill color, effect]. Orange ones are bad.
 const POWERS={
@@ -112,7 +129,8 @@ const POWERS={
 },PK=Object.keys(POWERS);
 function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
 
-let level=Math.min(+localStorage.bb_level||0,LEVELS.length-1),score=0,lives=3,speed=SPEED,state='ready';
+let stars=JSON.parse(localStorage.bb_stars||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
+const unlocked=i=>i===0||stars[i-1]>0;
 let grid=[],ROWS=0,left=0,balls=[],pows=[],parts=[],fx={pad:0,speed:0,fire:0},keys={};
 const pad={x:W/2-PAD_W/2,y:H-50,w:PAD_W,h:8};
 // Bricks live on an offscreen layer; a cell is repainted only when it changes.
@@ -126,10 +144,10 @@ function loadLevel(){
   const m=LEVELS[level];ROWS=m.length;grid=[];left=0;
   m.forEach((row,r)=>[...row].forEach((ch,c)=>{const hp=ch==='.'?0:ch==='#'?Infinity:+ch;grid[r*COLS+c]=hp;if(hp&&hp<Infinity)left++}));
   bctx.clearRect(0,0,W,H);for(let i=0;i<grid.length;i++)paint(i);
-  lives=3;resetBall();
+  lives=3;score=0;base=SPEED+level;resetBall();
 }
 function resetBall(){
-  pows=[];pad.w=PAD_W;fx={pad:0,speed:0,fire:0};speed=SPEED;
+  pows=[];pad.w=PAD_W;fx={pad:0,speed:0,fire:0};speed=base;
   balls=[{x:pad.x+pad.w/2,y:pad.y-5,r:4,vx:0,vy:0}];state='ready';
 }
 function setSpeed(s){speed=s;for(const b of balls){const k=s/(Math.hypot(b.vx,b.vy)||1);b.vx*=k;b.vy*=k}}
@@ -172,15 +190,16 @@ function collide(b){
 }
 
 function update(dt){
+  if(state==='menu')return;
   pad.x+=((keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0))*400*dt;
   pad.x=Math.max(0,Math.min(W-pad.w,pad.x));
-  for(const k in fx)if(fx[k]>0&&(fx[k]-=dt)<=0){if(k==='pad')pad.w=PAD_W;if(k==='speed')setSpeed(SPEED)}
+  for(const k in fx)if(fx[k]>0&&(fx[k]-=dt)<=0){if(k==='pad')pad.w=PAD_W;if(k==='speed')setSpeed(base)}
   if(state==='ready'){balls[0].x=pad.x+pad.w/2;balls[0].y=pad.y-5}
   if(state==='play'){
     for(const b of balls){const n=Math.ceil(speed*dt/3);for(let i=0;i<n;i++){b.x+=b.vx*dt/n;b.y+=b.vy*dt/n;collide(b)}}
     balls=balls.filter(b=>b.y<H+b.r);
     if(!balls.length){lives--;beep(120,.3,'sawtooth');if(lives<=0)state='over';else resetBall()}
-    else if(!left){state='win';localStorage.bb_level=(level+1)%LEVELS.length;beep(880,.4)}
+    else if(!left){state='win';stars[level]=Math.max(stars[level]||0,Math.min(3,lives));localStorage.bb_stars=JSON.stringify(stars);beep(880,.4)}
     for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;beep(660,.1)}}
     pows=pows.filter(p=>p.y<H);
   }
@@ -188,7 +207,19 @@ function update(dt){
   parts=parts.filter(p=>p.t>0);
 }
 
+function drawMenu(){
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='#5cb948';ctx.font='bold 24px monospace';ctx.fillText('BRICK BREAKER',W/2,38);
+  for(let i=0;i<LEVELS.length;i++){
+    const x=10+i%10*32,y=70+(i/10|0)*32,ok=unlocked(i);
+    ctx.fillStyle=ok?'#222':'#0c0c0c';ctx.fillRect(x,y,30,30);
+    ctx.fillStyle=ok?'#fff':'#444';ctx.font='11px monospace';ctx.fillText(i+1,x+15,y+11);
+    if(stars[i]){ctx.fillStyle='#fd3';ctx.font='8px serif';ctx.fillText('★'.repeat(stars[i]),x+15,y+23)}
+  }
+  ctx.fillStyle='#888';ctx.font='10px monospace';ctx.fillText('tap a level · tap the top bar to come back',W/2,H-20);
+}
 function draw(){
+  if(state==='menu')return drawMenu();
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(bg,0,0);
   ctx.fillStyle='#f27b55';ctx.fillRect(pad.x,pad.y,pad.w,pad.h);
   ctx.fillStyle=fx.fire>0?'#f63':'#fff';
@@ -209,24 +240,29 @@ function draw(){
       ctx.fillText('Congratulations',W/2,H/2-60);ctx.fillText('You win!',W/2,H/2-30);
       ctx.font='44px serif';const s=Math.min(3,lives);
       for(let i=0;i<3;i++){ctx.fillStyle=i<s?'#fd3':'#444';ctx.fillText('★',W/2+(i-1)*48,H/2+30)}
-      ctx.fillStyle='#fff';ctx.font='14px monospace';ctx.fillText('Tap for next level',W/2,H/2+80);
+      ctx.fillStyle='#fff';ctx.font='14px monospace';ctx.fillText(level+1<LEVELS.length?'Tap for next level':'All levels done!',W/2,H/2+80);
     }
   }
 }
 
 function tap(){
   if(state==='ready'){const a=(.2+Math.random()*.4)*(Math.random()<.5?-1:1),b=balls[0];b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);state='play';beep(440)}
-  else if(state==='win'){level=(level+1)%LEVELS.length;loadLevel()}
+  else if(state==='win'){if(level+1<LEVELS.length){level++;loadLevel()}else state='menu'}
   else if(state==='over'){score=0;loadLevel()}
 }
-const toX=e=>{const r=cv.getBoundingClientRect();return (e.clientX-r.left)*W/r.width};
-addEventListener('pointermove',e=>{pad.x=toX(e)-pad.w/2});
-cv.addEventListener('pointerdown',e=>{pad.x=toX(e)-pad.w/2;tap()});
-addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap()});
+const toXY=e=>{const r=cv.getBoundingClientRect(),k=W/r.width;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
+addEventListener('pointermove',e=>{pad.x=toXY(e)[0]-pad.w/2});
+cv.addEventListener('pointerdown',e=>{
+  const[x,y]=toXY(e);
+  if(state==='menu'){const i=((y-70)/32|0)*10+((x-10)/32|0);if(x>=10&&x<330&&y>=70&&y<390&&unlocked(i)){level=i;loadLevel()}return}
+  if(y<22&&state!=='play'){state='menu';return}
+  pad.x=x-pad.w/2;tap();
+});
+addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')state='menu'});
 addEventListener('keyup',e=>{keys[e.key]=0});
 
 let last=0;
 function loop(t){const dt=Math.min((t-last)/1000,1/30);last=t;update(dt);draw();requestAnimationFrame(loop)}
-loadLevel();requestAnimationFrame(loop);
+requestAnimationFrame(loop);
 </script>
 </html>
