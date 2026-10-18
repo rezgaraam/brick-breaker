@@ -9,7 +9,7 @@ const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,set
 const g={document:{documentElement:{},addEventListener:noop,body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop,focus:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
 g.window=g;g.setTimeout=setTimeout;g.clearTimeout=clearTimeout;
 let audioCtxs=0;g.AudioContext=function(){audioCtxs++}; // a dummy: only counts creations // browsers always have window; the bridge probes window.webkit
-vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},set balls(v){balls=v},set state(v){state=v},get grid(){return grid},get fx(){return fx},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N,split,P,GX,GY,set lives(v){lives=v}}',g);
+vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},crumble,set balls(v){balls=v},set state(v){state=v},get grid(){return grid},get fx(){return fx},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N,split,P,GX,GY,set lives(v){lives=v}}',g);
 const G=g.G,C=G.COLS,dt=1/60;
 assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 
@@ -95,9 +95,17 @@ assert.equal(G.I18N.en.livesN(1),'1 life');assert.equal(G.I18N.fr.livesN(1),'1 v
    for(let f=0;f<600;f++){G.update(1/120);if(b.y<yTop+4)break;if(b.vy>0&&b.y<yBot-8){turned++;break}}}
  assert.equal(turned,0,`${turned} balls turned back inside the canal`);G.level=G.LEVELS.length-1;}
 
+// 11. Crumble: a hit breaks every brick within 3 steps (a 25-cell diamond in a solid field), never steel, and a
+//     two-hit brick only loses one hit point.
+{G.LEVELS.push(Array(20).fill('#'.repeat(2)+'1'.repeat(C-4)+'#'.repeat(2)));G.level=G.LEVELS.length-1;G.loadLevel();
+ const steel=G.grid.filter(h=>h===Infinity).length,l0=G.left;assert.equal(G.crumble(10,28),25,'radius-3 diamond');
+ assert.equal(l0-G.left,25);assert.equal(G.grid.filter(h=>h===Infinity).length,steel,'steel touched');
+ G.grid[5*C+10]=2;G.crumble(5,10);assert.equal(G.grid[5*C+10],1,'two-hit brick lost more than one hit point');
+ G.LEVELS.pop();G.level=G.LEVELS.length-1;}
+
 // 3. Assisted play wins the same level with no paddle input at all.
 G.cfg.assist=true;G.loadLevel();G.tap();
 for(let i=0;i<60*1200&&G.state==='play';i++)G.update(dt);
 assert.equal(G.state,'win',`assisted play: ${G.state} with ${G.left} bricks left`);
 G.cfg.assist=false;
-console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable + no tunnelling + canal seams, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
+console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable + no tunnelling + canal seams + crumble, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);

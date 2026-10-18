@@ -113,6 +113,11 @@ phone with the team. Release steps are in `PLAN-ios.md`.
   whose first button is the primary action. The loop stops in `menu` and `pause`. Timed effects live in
   `fx` (seconds left) and reset in `update()`. Ball speed is `base` = (`SPEED` + level) x `cfg.speed`; the slow/fast power-ups scale `base` (x0.7 / x1.35).
   `resetBall()` also resets `combo`, so a combo never carries into a new ball or level.
+- **Crumble**: a hit on a breakable brick calls `crumble(r,c)`, which damages every breakable brick within `CRUMBLE`
+  (=3) steps, spreading through bricks and empty cells but never through steel. `combo` counts hits, not bricks;
+  power-ups roll once per hit (`DROP`). Measured pace (assisted play, 16 sampled levels, 10 min each): one brick
+  per hit cleared ~1% in 5 min; radius 3 wins 13/16 levels, typically in 3-5 min. Re-measure if you change
+  `CRUMBLE`, `DROP`, canal widths or field sizes; test.js section 11 pins the 25-cell diamond.
 - **Power-ups** are the `POWERS` table: label -> `[pill color, effect fn]`. Add one by adding a row.
 - **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake, speed (ball speed multiplier
   0.75/1/1.25/1.5, applied live via `baseSpeed()`), paddle 0=follow / >0=drag gain, assist, lang) behind a native `<dialog>`;

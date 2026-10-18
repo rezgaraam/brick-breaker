@@ -364,14 +364,27 @@ function collide(b){
       else if(solid(r+Math.sign(dy),c))n=dx&&!solid(r,c+Math.sign(dx))?[dx,0]:back;
     }
     if(!(fx.fire>0&&grid[i]<Infinity))bounce(b,n);
-    grid[i]--;paint(i);
-    if(grid[i]>0)sfx(grid[i]===Infinity?'steel':'hit');
-    else{
-      combo++;sfx('break');haptic();jolt(1);left--;score+=10+combo; // combo = bricks since the last paddle hit
-      for(let k=0;k<6;k++)parts.push({x:x+2,y:y+2,vx:(Math.random()-.5)*200,vy:(Math.random()-.8)*200,t:.5});
-      if(Math.random()<.04)pows.push({x:x+2,y:y+2,t:PK[Math.random()*PK.length|0]});
-    }
+    if(grid[i]===Infinity){sfx('steel');continue}
+    combo++;const broke=crumble(r,c); // combo = hits since the last paddle hit
+    if(broke){sfx('break');haptic();jolt(1);if(Math.random()<DROP)pows.push({x:x+2,y:y+2,t:PK[Math.random()*PK.length|0]})}
+    else sfx('hit');
   }
+}
+// Crumble: a hit damages every breakable brick within CRUMBLE steps of the hit cell, spreading through bricks and
+// empty space but never through steel (so it cannot jump a wall into another chamber). One canal shot used to break
+// a single brick and fields took hours; see PLAN/CLAUDE.md for the measured pace. Returns bricks destroyed.
+const CRUMBLE=3,DROP=.12;
+function crumble(r0,c0){
+  const q=[r0,c0,0],seen=new Set([r0*COLS+c0]);let broke=0;
+  for(let h=0;h<q.length;h+=3){
+    const r=q[h],c=q[h+1],d=q[h+2],j=r*COLS+c;
+    if(grid[j]>0&&grid[j]<Infinity){grid[j]--;paint(j);
+      if(!grid[j]){broke++;left--;score+=10+combo;const x=GX+c*P+2,y=GY+r*P+2;
+        for(let k=0;k<2;k++)parts.push({x,y,vx:(Math.random()-.5)*200,vy:(Math.random()-.8)*200,t:.5})}}
+    if(d<CRUMBLE)for(const[ar,ac]of[[1,0],[-1,0],[0,1],[0,-1]]){const nr=r+ar,nc=c+ac,k=nr*COLS+nc;
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS||seen.has(k)||grid[k]===Infinity)continue;seen.add(k);q.push(nr,nc,d+1)}
+  }
+  return broke;
 }
 
 // Assisted play: the paddle follows the lowest falling ball; the offset is re-rolled on each paddle hit so the
