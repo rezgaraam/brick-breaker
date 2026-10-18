@@ -80,7 +80,7 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   `bounce()` sets the sign of a velocity component rather than negating it, so a second overlap on the
   next substep is a no-op instead of a double bounce.
 - **Game state** is a string: `menu` (level select) -> `ready` (ball riding the paddle) -> `play` ->
-  `win` | `over`; `tap()` advances it, the top bar / Escape returns to `menu`. Timed effects live in
+  `win` | `over`; `tap()` advances it, `goMenu()` (MENU button, Escape) returns to `menu`. Timed effects live in
   `fx` (seconds left) and reset in `update()`. Ball speed is `base` = `SPEED` + level.
 - **Power-ups** are the `POWERS` table: label -> `[pill color, effect fn]`. Add one by adding a row.
 - **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake, paddle 0=follow / >0=drag gain) behind a native `<dialog>`;
@@ -98,6 +98,16 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
 - Persistence: `localStorage.bb_stars` (JSON `{levelIndex: stars}`, level i unlocks when i-1 has a
   star), `localStorage.bb_best` (best score per level) and `localStorage.bb_mute`. Inside the iOS app the
   first two are overwritten at every launch from SwiftData.
+
+## Accessibility
+
+Everything a player taps outside the playfield is real HTML, never canvas-drawn: the level select (`goMenu()`
+renders 100 `<button>`s with labels like "Level 4, 2 of 3 stars" / "locked"), mute, settings, STATS, MENU,
+and the settings rows (44px `role=switch` buttons). Sizes use `cqw` so they track the canvas scale. Game
+events are announced through the `say()` aria-live region. The playfield itself is a canvas and is not
+playable with VoiceOver. `AccessibilityAuditTests` runs Apple's `performAccessibilityAudit` on the menu,
+settings and stats screens; it must stay at zero findings. The only accepted issue (system toolbar buttons
+and Dynamic Type) is filtered in the test with its reason; never filter by skipping audit types.
 
 ## Invariants the geometry depends on
 

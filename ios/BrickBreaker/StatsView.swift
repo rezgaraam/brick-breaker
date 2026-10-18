@@ -38,9 +38,10 @@ struct StatsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
-                ToolbarItem(placement: .destructiveAction) {
-                    Button("Reset", role: .destructive) { confirmReset = true }
-                        .disabled(results.isEmpty)
+                if !results.isEmpty { // hidden, not greyed out: a disabled destructive button fails contrast
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button("Reset", role: .destructive) { confirmReset = true }
+                    }
                 }
             }
             .confirmationDialog("Reset all progress?", isPresented: $confirmReset, titleVisibility: .visible) {

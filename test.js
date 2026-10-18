@@ -5,8 +5,8 @@ const fs=require('fs'),assert=require('assert'),vm=require('vm');
 const src=fs.readFileSync(__dirname+'/index.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1];
 const noop=()=>{};
 const ctx2d=new Proxy({},{get:()=>noop,set:()=>true});
-const canvas={width:340,height:600,style:{},getContext:()=>ctx2d,addEventListener:noop,getBoundingClientRect:()=>({left:0,top:0,width:340,height:600})};
-const g={document:{body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
+const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,getContext:()=>ctx2d,addEventListener:noop,getBoundingClientRect:()=>({left:0,top:0,width:340,height:600})};
+const g={document:{body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
 g.window=g; // browsers always have window; the bridge probes window.webkit
 vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS}',g);
 const G=g.G,C=G.COLS,dt=1/60;

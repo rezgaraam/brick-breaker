@@ -12,34 +12,42 @@
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;overscroll-behavior:none}
 body{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-#wrap{position:relative;width:100%;max-width:100%;aspect-ratio:340/600} /* width is set by fit() */
+#wrap{position:relative;width:100%;max-width:100%;aspect-ratio:340/600;container-type:inline-size} /* width is set by fit(); cqw = 1% of it */
 canvas{display:block;width:100%;height:100%;background:#000}
 #wrap button{position:absolute;bottom:0;background:none;border:0;color:#aaa;font:12px monospace;padding:14px 10px;cursor:pointer}
-#mute{left:0}#settings{left:64px}#stats{right:0}
+#mute{left:0}#settings{left:64px}#stats,#home{right:0}
+/* Level select is real HTML (VoiceOver, keyboard, hit testing); sizes in cqw mirror the 340-wide logical canvas. */
+#menu{position:absolute;inset:0;background:#000;text-align:center;font-family:monospace}
+#menu h1{position:absolute;top:3.3%;width:100%;margin:0;font-size:7cqw;color:#5cb948}
+#levels{position:absolute;left:1.5%;top:11.5%;width:97%;display:grid;grid-template-columns:repeat(10,1fr);gap:.6cqw}
+#levels button{position:static;aspect-ratio:1;padding:0;border:0;background:#222;color:#fff;font:3.3cqw monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+#levels button:disabled{background:#0c0c0c;color:#888;cursor:default}
+#levels span{font:2.4cqw serif;color:#fd3;min-height:1em}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 dialog{background:#111;color:#ddd;border:1px solid #333;font:14px monospace;padding:16px 20px;min-width:220px}
 dialog::backdrop{background:rgba(0,0,0,.6)}
 dialog h2{margin:0 0 8px;font-size:16px;color:#5cb948}
-dialog label{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 0;min-height:28px}
+#opts button{display:flex;justify-content:space-between;align-items:center;gap:24px;width:100%;min-height:44px;margin:0;padding:0 2px;background:none;border:0;border-bottom:1px solid #222;text-align:left}
+#opts b{color:#5cb948;font-weight:normal}#opts b.off{color:#888}
 dialog button{font:inherit;padding:8px 12px;margin-top:10px;background:#222;color:#ddd;border:1px solid #444;cursor:pointer}
 dialog .danger{color:#f66;border-color:#733}
-dialog select{font:inherit;background:#222;color:#ddd;border:1px solid #444;padding:4px}
 [hidden]{display:none!important}
 </style>
-<div id="wrap"><canvas id="c"></canvas><button id="mute">♪ on</button><button id="settings" aria-label="Settings">⚙</button><button id="stats" hidden>STATS</button></div>
+<div id="wrap"><canvas id="c" role="img" aria-label="Game field"></canvas>
+  <div id="menu"><h1>BRICK BREAKER</h1><div id="levels" role="group" aria-label="Levels"></div></div>
+  <button id="mute">♪ on</button><button id="settings" aria-label="Settings">⚙</button><button id="stats" hidden>STATS</button><button id="home" hidden>MENU</button>
+  <p id="say" class="sr" aria-live="polite"></p></div>
 <dialog id="cfg">
   <h2>Settings</h2>
-  <label>Music <input type="checkbox" name="music"></label>
-  <label>Sound effects <input type="checkbox" name="sfx"></label>
-  <label id="hapRow">Haptics <input type="checkbox" name="haptics"></label>
-  <label>Screen shake <input type="checkbox" name="shake"></label>
-  <label>Paddle <select name="paddle"><option value="0">Follow finger</option><option value="1">Drag 1x</option><option value="1.5">Drag 1.5x</option><option value="2">Drag 2x</option></select></label>
+  <div id="opts"></div>
   <button id="reset" class="danger">Reset progress</button>
   <form method="dialog"><button>Close</button></form>
 </dialog>
 <script>
 'use strict';
 const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=340,H=600; // logical size; see fit()
-const muteBtn=document.getElementById('mute'),statsBtn=document.getElementById('stats'),wrap=document.getElementById('wrap');
+const $=id=>document.getElementById(id),muteBtn=$('mute'),statsBtn=$('stats'),homeBtn=$('home'),wrap=$('wrap'),menuEl=$('menu'),levelsEl=$('levels'),sayEl=$('say');
+const say=t=>{sayEl.textContent=t}; // spoken by VoiceOver through the aria-live region
 const COLS=56,P=6,GX=2,GY=22,PAD_W=60,SPEED=280,MAX_BALLS=20;
 
 // Level maps: . empty, 1 green, 2 two-hit, # steel (unbreakable). 56 columns of 5px bricks.
@@ -184,7 +192,7 @@ function loadLevel(){
   const m=LEVELS[level];ROWS=m.length;grid=[];left=0;
   m.forEach((row,r)=>[...row].forEach((ch,c)=>{const hp=ch==='.'?0:ch==='#'?Infinity:+ch;grid[r*COLS+c]=hp;if(hp&&hp<Infinity)left++}));
   bctx.clearRect(0,0,W,H);for(let i=0;i<grid.length;i++)paint(i);
-  lives=3;score=0;base=SPEED+level;resetBall();
+  lives=3;score=0;base=SPEED+level;resetBall();say(`Level ${level+1}. Tap to launch.`);
 }
 function resetBall(){
   pows=[];pad.w=PAD_W;fx={pad:0,speed:0,fire:0};speed=base;
@@ -276,8 +284,8 @@ function update(dt){
     music();
     for(const b of balls){b.trail.push({x:b.x,y:b.y});if(b.trail.length>8)b.trail.shift();const n=Math.ceil(speed*dt/3);for(let i=0;i<n;i++){b.x+=b.vx*dt/n;b.y+=b.vy*dt/n;collide(b)}}
     balls=balls.filter(b=>b.y<H+b.r);
-    if(!balls.length){lives--;sfx('lose');jolt(8);if(lives<=0)state='over';else resetBall()}
-    else if(!left){state='win';const s=Math.min(3,lives);stars[level]=Math.max(stars[level]||0,s);best[level]=Math.max(best[level]||0,score);localStorage.bb_stars=JSON.stringify(stars);localStorage.bb_best=JSON.stringify(best);native({type:'level',level,stars:s,score});sfx('win');burst()}
+    if(!balls.length){lives--;sfx('lose');jolt(8);if(lives<=0){state='over';say(`Game over. Score ${score}.`)}else{resetBall();say(`Ball lost. ${lives} lives left.`)}}
+    else if(!left){state='win';const s=Math.min(3,lives);stars[level]=Math.max(stars[level]||0,s);best[level]=Math.max(best[level]||0,score);localStorage.bb_stars=JSON.stringify(stars);localStorage.bb_best=JSON.stringify(best);native({type:'level',level,stars:s,score});sfx('win');burst();say(`Level cleared. ${s} of 3 stars. Score ${score}.`)}
     for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;jolt(2);sfx(POWERS[p.t][0]==='#f80'?'bad':'power')}}
     pows=pows.filter(p=>p.y<H);
   }
@@ -285,20 +293,20 @@ function update(dt){
   parts=parts.filter(p=>p.t>0);
 }
 
-function drawMenu(){
-  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle='#5cb948';ctx.font='bold 24px monospace';ctx.fillText('BRICK BREAKER',W/2,38);
-  for(let i=0;i<LEVELS.length;i++){
-    const x=10+i%10*32,y=70+(i/10|0)*32,ok=unlocked(i);
-    ctx.fillStyle=ok?'#222':'#0c0c0c';ctx.fillRect(x,y,30,30);
-    ctx.fillStyle=ok?'#fff':'#444';ctx.font='11px monospace';ctx.fillText(i+1,x+15,y+11);
-    if(stars[i]){ctx.fillStyle='#fd3';ctx.font='8px serif';ctx.fillText('★'.repeat(stars[i]),x+15,y+23)}
-  }
-  ctx.fillStyle='#888';ctx.font='10px monospace';ctx.fillText('tap a level · top bar returns here · M mutes',W/2,H-36);
+function goMenu(){
+  state='menu';
+  levelsEl.replaceChildren(...LEVELS.map((_,i)=>{
+    const b=document.createElement('button'),ok=unlocked(i),n=stars[i]||0;
+    b.disabled=!ok;b.innerHTML=`${i+1}<span aria-hidden="true">${'★'.repeat(n)}</span>`;
+    b.setAttribute('aria-label',ok?`Level ${i+1}`+(n?`, ${n} of 3 stars`:''):`Level ${i+1}, locked`);
+    b.onclick=()=>{level=i;loadLevel()};return b;
+  }));
 }
 function draw(){
+  wrap.style.visibility=dlg.open?'hidden':''; // nothing half-visible behind the modal settings dialog
+  menuEl.hidden=state!=='menu';homeBtn.hidden=state==='menu';
   statsBtn.hidden=!(inApp()&&state==='menu');
-  if(state==='menu')return drawMenu();
+  if(state==='menu')return;
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
   ctx.save();if(shake>0)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
   ctx.drawImage(bg,0,0,W,H);
@@ -332,7 +340,7 @@ function draw(){
 
 function tap(){
   if(state==='ready'){const a=(.2+Math.random()*.4)*(Math.random()<.5?-1:1),b=balls[0];b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);state='play';sfx('paddle');try{navigator.wakeLock?.request('screen').catch(()=>{})}catch{}}
-  else if(state==='win'){if(level+1<LEVELS.length){level++;loadLevel()}else state='menu'}
+  else if(state==='win'){if(level+1<LEVELS.length){level++;loadLevel()}else goMenu()}
   else if(state==='over'){score=0;loadLevel()}
 }
 const toXY=e=>{const r=cv.getBoundingClientRect(),k=W/r.width;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
@@ -341,17 +349,23 @@ let lastPX=null;
 addEventListener('pointermove',e=>{const x=toXY(e)[0];if(cfg.paddle>0){if(e.buttons&&lastPX!=null)pad.x+=(x-lastPX)*cfg.paddle;lastPX=x}else pad.x=x-pad.w/2});
 cv.addEventListener('pointerdown',e=>{
   const[x,y]=toXY(e);
-  if(state==='menu'){const i=((y-70)/32|0)*10+((x-10)/32|0);if(x>=10&&x<330&&y>=70&&y<390&&unlocked(i)){level=i;loadLevel()}return}
-  if(y<22&&state!=='play'){state='menu';return}
   lastPX=x;if(!(cfg.paddle>0))pad.x=x-pad.w/2;tap();
 });
-addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')state='menu';if(e.key==='m')toggleMute()});
+addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')goMenu();if(e.key==='m')toggleMute()});
 addEventListener('keyup',e=>{keys[e.key]=0});
-muteBtn.onclick=toggleMute;statsBtn.onclick=()=>native({type:'stats'});
+muteBtn.onclick=toggleMute;homeBtn.onclick=goMenu;statsBtn.onclick=()=>native({type:'stats'});
 // Settings dialog: toggles persist in localStorage; reset clears progress (through the shell on iOS).
 document.getElementById('settings').onclick=()=>dlg.showModal();
-document.querySelectorAll('#cfg input,#cfg select').forEach(i=>{if(i.type==='checkbox')i.checked=cfg[i.name];else i.value=String(cfg[i.name]);i.onchange=()=>{cfg[i.name]=i.type==='checkbox'?i.checked:+i.value;localStorage.bb_cfg=JSON.stringify(cfg)}});
-document.getElementById('hapRow').hidden=!inApp();
+// Each setting is one full-width 44px button: role=switch for on/off, a cycling button for the paddle mode.
+const PADS={0:'Follow finger',1:'Drag 1x',1.5:'Drag 1.5x',2:'Drag 2x'},saveCfg=()=>{localStorage.bb_cfg=JSON.stringify(cfg)};
+$('opts').append(...[['music','Music'],['sfx','Sound effects'],['haptics','Haptics'],['shake','Screen shake'],['paddle','Paddle']]
+  .filter(([k])=>k!=='haptics'||inApp()).map(([k,name])=>{
+    const b=document.createElement('button');b.type='button';
+    const show=()=>{const v=cfg[k];if(k==='paddle'){b.innerHTML=`${name}<b>${PADS[v]}</b>`;b.setAttribute('aria-label',`Paddle control, ${PADS[v]}`)}
+      else{b.setAttribute('role','switch');b.setAttribute('aria-checked',String(v));b.innerHTML=`${name}<b class="${v?'':'off'}" aria-hidden="true">${v?'ON':'OFF'}</b>`}};
+    b.onclick=()=>{const ks=Object.keys(PADS).map(Number);cfg[k]=k==='paddle'?ks[(ks.indexOf(cfg[k])+1)%ks.length]:!cfg[k];saveCfg();show()};
+    show();return b;
+  }));
 const resetBtn=document.getElementById('reset');let armed=0;
 resetBtn.onclick=()=>{
   if(!armed){resetBtn.textContent='Tap again to confirm';armed=setTimeout(()=>{armed=0;resetBtn.textContent='Reset progress'},3000);return}
@@ -361,7 +375,7 @@ addEventListener('resize',()=>{fit();for(let i=0;i<grid.length;i++)paint(i)});
 
 let last=0;
 function loop(t){const dt=Math.min((t-last)/1000,1/30);last=t;update(dt);draw();requestAnimationFrame(loop)}
-requestAnimationFrame(loop);
+goMenu();requestAnimationFrame(loop);
 try{navigator.serviceWorker?.register('sw.js')}catch{}
 </script>
 </html>
