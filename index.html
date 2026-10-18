@@ -91,20 +91,28 @@ const make=(rows,f)=>Array.from({length:rows},(_,r)=>Array.from({length:COLS},(_
 const cells=m=>m.map(s=>[...s]),join=g=>g.map(r=>r.join(''));
 // Sealed steel frame packed with bricks. The only way in is a canal, a steel-walled channel open at
 // the bottom edge; the ball flies up it and eats the field from inside. canals: [col, width, height].
-function field(rows,canals){
-  const g=cells(make(rows,(r,c)=>r<2||r>=rows-2||c<2||c>=COLS-2?'#':'1'));
-  for(const[c0,w,h]of canals)for(let r=rows-h;r<rows;r++)for(let c=c0-2;c<c0+w+2;c++)g[r][c]=c<c0||c>=c0+w?'#':'.';
+// seal(): wrap any grid in the 2-brick steel frame and cut steel-walled canals up through its bottom wall.
+// Every level goes through it (see LEVELS), so every level is sealed; steel (hp Infinity) never breaks.
+function seal(g,canals){
+  const R=g.length;
+  for(let r=0;r<R;r++)for(let c=0;c<COLS;c++)if(r<2||r>=R-2||c<2||c>=COLS-2)g[r][c]='#';
+  for(const[c0,w,h]of canals)for(let r=R-h;r<R;r++)for(let c=c0-2;c<c0+w+2;c++)g[r][c]=c<c0||c>=c0+w?'#':'.';
   return join(g);
 }
+const field=(rows,canals)=>seal(cells(make(rows,()=>'1')),canals);
+// 1-3 canals (more on later levels), spread across the width, each wall kept >=2 brick columns off the frame.
+const canalsFor=(i,R,d,hMin,hSpan)=>{const n=1+(i/35|0),w=d.canal,slot=COLS/n;
+  return Array.from({length:n},(_,k)=>[Math.min(COLS-6-w,Math.max(6,Math.round(slot*k+slot/2-w/2+(d.r()-.5)*6))),w,hMin+(d.r()*hSpan|0)])};
+const framed=m=>m.slice(0,2).every(row=>/^#+$/.test(row))&&m.every(row=>row.startsWith('##')&&row.endsWith('##'));
 // Carve a steel room (cols 14-41, rows 4..R/3-ish) into a brick grid, door at the bottom centre.
 const room=(g,R)=>{const b=R-(R/3|0)-3;for(let r=4;r<b;r++)for(let c=14;c<42;c++)if(r<6||r>=b-2||c<16||c>=40)g[r][c]=r>=b-2&&c>=26&&c<30?'.':'#';return g};
 const TEMPLATES=[
   // 1-3 canals, more as levels go up, random heights
-  (i,R,d)=>{const n=1+(i/35|0),w=d.canal,slot=COLS/n;return field(R,Array.from({length:n},(_,k)=>[Math.min(COLS-6-w,Math.max(6,Math.round(slot*k+slot/2-w/2+(d.r()-.5)*6))),w,8+(d.r()*(R-16)|0)]))}, // keep >=2 brick columns between a wall and the frame
+  (i,R,d)=>field(R,canalsFor(i,R,d,8,R-16)),
   // solid block with random holes punched out
   (i,R,d)=>{const g=cells(make(R,()=>'1'));for(let k=0;k<4+i/5;k++){const h=2+(d.r()*3|0),w=2+(d.r()*5|0),r0=d.r()*(R-h)|0,c0=d.r()*(COLS-w)|0;for(let r=r0;r<r0+h;r++)for(let c=c0;c<c0+w;c++)g[r][c]='.'}return join(g)},
   // brick bands separated by staggered steel rows with gaps
-  (i,R,d)=>{const off=d.r()<.5?0:4;return make(R,(r,c)=>r%8===7?((c+off+(r/8|0)*4)%8<4?'#':'.'):'1')},
+  (i,R,d)=>{const off=d.r()<.5?0:4;return make(R,(r,c)=>r%8===7&&r<=R-5?((c+off+(r/8|0)*4)%8<4?'#':'.'):'1')},
   // a canal field with an inner steel room whose only door is at its bottom
   (i,R,d)=>join(room(cells(field(R,[[26,d.canal,R/3|0]])),R)),
   // diamond with a two-hit core
@@ -186,7 +194,10 @@ const diff=i=>({rows:28+(36*i/99|0),two:.4*i/99,canal:i<30?4:3,r:rng(i+1)});
 const LEVELS=Array.from({length:100},(_,i)=>{
   const d=diff(i),m=i===99?join(room(cells(field(64,[[7,3,20],[27,3,14],[46,3,26]])),64)) // finale: tallest field, three canals, inner room
     :i%12===11?SET[(i/12|0)%SET.length]:TEMPLATES[i%TEMPLATES.length](i,d.rows,d);
-  return m.map(row=>[...row].map(ch=>ch==='1'&&d.r()<d.two?'2':ch).join(''));
+  // Holes/bands/diamond/hand-drawn get the wall too. Their openings are doorways through the 2-row bottom wall only
+  // (canal height 2): canal walls inside the field can close a gap to one brick row, too narrow for the 8px ball.
+  const sealed=framed(m)?m:seal(cells(m),canalsFor(i,m.length,d,2,1));
+  return sealed.map(row=>[...row].map(ch=>ch==='1'&&d.r()<d.two?'2':ch).join(''));
 });
 
 // Power-ups: label -> [pill color, effect]. Orange ones are bad.

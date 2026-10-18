@@ -78,7 +78,11 @@ phone with the team. Release steps are in `PLAN-ios.md`.
 - **Levels** are arrays of 56-char strings: `.` empty, `1` green, `2` two-hit, `#` steel (hp `Infinity`).
   All 100 are generated at load, deterministically from the index: `diff(i)` gives rows / two-hit share /
   canal width, `TEMPLATES[i % 5]` builds the map from a seeded `rng(i+1)`, every 12th level is a
-  hand-drawn map from `SET` scaled 4x. Changing a template or `diff` changes every level that uses it,
+  hand-drawn map from `SET` scaled 4x.
+  **Every level is sealed in the 2-brick steel frame** (`seal()`): canal and room levels build it themselves with
+  tall steel-walled canals; holes/bands/diamond/hand-drawn levels get it in the `LEVELS` builder with doorways
+  through the bottom wall only (a tall canal's walls inside those patterns closed gaps to one brick row, which an
+  8px ball cannot enter). Steel bands stay >=2 rows above the bottom wall for the same reason. Changing a template or `diff` changes every level that uses it,
   so re-run `node test.js` (it validates all 100) and render a few.
 - **Grid state** is a flat array `grid[r*COLS+c]` of hp numbers (0 empty). `left` counts breakable bricks
   and drives the win check, so anything that removes a brick must decrement it.
@@ -145,6 +149,8 @@ any plain page text); never filter by skipping audit types.
 
 ## Invariants the geometry depends on
 
+- Every level: top 2 rows steel, 2 steel columns on both sides, an opening in the bottom wall; steel (hp
+  `Infinity`) never breaks, fireball included. `test.js` checks all three on all 100 levels.
 - Ball radius 4 (8px) vs 5px cells with 1px gaps: a passage must be >=2 cells wide. `test.js`
   flood-fills 2x2 windows of non-steel cells from below and fails on any brick an 8px ball cannot reach.
 - Canvas is 340 wide so the side margins (`GX`=2, 3px right) are narrower than the ball; it cannot slip

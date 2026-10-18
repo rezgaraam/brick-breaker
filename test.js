@@ -9,7 +9,7 @@ const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,set
 const g={document:{documentElement:{},addEventListener:noop,body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop,focus:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
 g.window=g;g.setTimeout=setTimeout;g.clearTimeout=clearTimeout;
 let audioCtxs=0;g.AudioContext=function(){audioCtxs++}; // a dummy: only counts creations // browsers always have window; the bridge probes window.webkit
-vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N}',g);
+vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},get speed(){return speed},get grid(){return grid},get fx(){return fx},get combo(){return combo},set combo(v){combo=v},get ac(){return ac},set ac(v){ac=v},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N}',g);
 const G=g.G,C=G.COLS,dt=1/60;
 assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 
@@ -17,6 +17,9 @@ assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 //    an 8px ball: flood-fill 2x2 windows of non-steel cells (one 5px cell is too narrow).
 for(const [i,L] of G.LEVELS.entries()){
   assert(L.every(r=>r.length===C),`level ${i+1}: row width`);
+  // the grey steel wall: top 2 rows solid, 2 steel columns on both sides of every row, bottom 2 rows steel except canals
+  assert(L.slice(0,2).every(r=>/^#+$/.test(r))&&L.every(r=>r.startsWith('##')&&r.endsWith('##')),`level ${i+1}: steel frame missing`);
+  assert(L.slice(-2).every(r=>r.includes('#')&&r.includes('.')),`level ${i+1}: bottom wall has no canal`);
   const pad='.'.repeat(C),rows=[pad,pad,...L,pad,pad],R=rows.length,open=(r,c)=>r>=0&&r<R&&c>=0&&c<C&&rows[r][c]!=='#';
   const seen=new Set(),reached=new Set(),q=[[R-2,0]];
   while(q.length){const [r,c]=q.pop(),k=r*C+c;if(seen.has(k)||!open(r,c)||!open(r,c+1)||!open(r+1,c)||!open(r+1,c+1))continue;seen.add(k);for(const d of[k,k+1,k+C,k+C+1])reached.add(d);q.push([r+1,c],[r-1,c],[r,c+1],[r,c-1])}
@@ -55,9 +58,17 @@ G.combo=7;G.loadLevel();assert.equal(G.combo,0,'combo carried into a new level')
 G.cfg.sfx=false;G.ac=undefined;audioCtxs=0;G.loadLevel();G.tap();assert(audioCtxs===1&&G.ac,'no AudioContext when SFX is off (music would be silent)');G.cfg.sfx=true;
 assert.equal(G.I18N.en.livesN(1),'1 life');assert.equal(G.I18N.fr.livesN(1),'1 vie');assert.equal(G.I18N.es.sayLost(1),'Bola perdida. Queda 1 vida.');
 
+// 8. Steel is unbreakable: two minutes of assisted play with the fireball active (which passes through bricks)
+//    on the finale; every steel cell is still steel afterwards.
+{const steel=()=>G.grid.filter(h=>h===Infinity).length;
+ G.level=99;G.cfg.assist=true;G.loadLevel();const s0=steel(),b0=G.left;G.tap();
+ for(let i=0;i<60*120&&G.state==='play';i++){G.fx.fire=9;G.update(dt)}
+ assert(s0>0&&steel()===s0,`steel changed: ${s0} -> ${steel()}`);assert(G.left<b0,'nothing was broken, test proves nothing');
+ G.cfg.assist=false;G.level=G.LEVELS.length-1;}
+
 // 3. Assisted play wins the same level with no paddle input at all.
 G.cfg.assist=true;G.loadLevel();G.tap();
 for(let i=0;i<60*1200&&G.state==='play';i++)G.update(dt);
 assert.equal(G.state,'win',`assisted play: ${G.state} with ${G.left} bricks left`);
 G.cfg.assist=false;
-console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
+console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, steel frame + unbreakable, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);
