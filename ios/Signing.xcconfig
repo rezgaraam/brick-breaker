@@ -1,0 +1,5 @@
+// Device signing. Automatic signing with the team from Local.xcconfig (gitignored, per machine):
+//   echo 'DEVELOPMENT_TEAM = <your 10-char team ID>' > ios/Local.xcconfig
+// Find the ID in Xcode > Settings > Accounts. Simulator builds work without it.
+CODE_SIGN_STYLE = Automatic
+#include? "Local.xcconfig"

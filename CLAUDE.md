@@ -16,6 +16,7 @@ node test.js           # the main test: DOM-stubbed smoke test, ~5s, exits non-z
 python3 -m http.server 8000   # needed only to exercise the service worker (no SW on file://)
 node pwa-check.js "$CHROMIUM" .   # PWA check: manifest, SW install, offline reload (see file header)
 node bench.js "$CHROMIUM" "$PWD/index.html"   # frame-time check: level 100, 20 balls, 3x DPR, 4x CPU throttle
+ios/run-device.sh                 # iOS on a plugged-in iPhone: sign (team in gitignored ios/Local.xcconfig), install, launch
 ios/check.sh                      # iOS: package tests (swift test) + simulator build (+ UI test if a sim is booted)
 ```
 

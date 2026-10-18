@@ -5,3 +5,4 @@ ios/BrickBreakerCore/.swiftpm/
 *.xcuserdatad/
 .DS_Store
 ios/build/
+ios/Local.xcconfig

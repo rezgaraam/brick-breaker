@@ -17,6 +17,9 @@ targets:
         buildPhase: resources
     dependencies:
       - package: BrickBreakerCore
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
     settings:
       base:
         SWIFT_VERSION: "5.0"
