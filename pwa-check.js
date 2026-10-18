@@ -14,6 +14,8 @@ const server=http.createServer((req,res)=>{
 }).listen(PORT,'127.0.0.1');                                             // loopback only
 const chrome=spawn(bin,['--headless','--disable-gpu','--no-first-run',`--remote-debugging-port=${DBG}`,`--user-data-dir=${require('os').tmpdir()+'/bb-pwa-profile-'+Date.now()}`,`http://127.0.0.1:${PORT}/index.html`],{stdio:'ignore'});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+// Watchdog: a CDP call that never answers (e.g. serviceWorker.ready under heavy load) must fail loudly, not hang.
+setTimeout(()=>{console.error('FAIL: timed out after 60s (no answer from the browser)');chrome.kill();process.exit(1)},60000).unref();
 (async()=>{
   let page;for(let i=0;i<50&&!page;i++){try{page=(await (await fetch(`http://127.0.0.1:${DBG}/json/list`)).json()).find(t=>t.type==='page'&&t.url.includes('index.html'))}catch{}if(!page)await sleep(200)}
   if(!page)throw new Error('no page target');
