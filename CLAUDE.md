@@ -27,7 +27,8 @@ $BIN --headless --disable-gpu --hide-scrollbars --window-size=340,600 --virtual-
 
 ## Web app files
 
-The repo root is the site (GitHub Pages from `master`, `.nojekyll` present). `manifest.webmanifest` +
+The repo root is the site: https://rezgaraam.github.io/brick-breaker/ (GitHub Pages from `master`, `.nojekyll`
+present; pushing `master` is the deploy). `manifest.webmanifest` +
 `icon-192.png`/`icon-512.png` make it installable; `sw.js` is a network-first cache, so a deploy shows on
 the next load with no version bump, and the cache only answers when the network fails. Bump `CACHE` in
 `sw.js` only when its `FILES` list changes. Registration and the screen wake lock in `index.html` are
