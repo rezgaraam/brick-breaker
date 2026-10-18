@@ -17,13 +17,17 @@ final class AccessibilityAuditTests: XCTestCase {
             // Dynamic Type support; our content is all system text styles.
             if issue.auditType == .dynamicType, let label = issue.element?.label,
                app!.navigationBars.buttons[label].exists { return true }
+            // Accepted: WebKit reports non-interactive page content (HUD score/level/lives, the card's info line) as a
+            // possible tap target; the hit-area rule is for controls, and buttons/switches are still checked.
+            if issue.auditType == .hitRegion, let type = issue.element?.elementType,
+               [.staticText, .image].contains(type) { return true }
             print("A11Y[\(screen)] \(issue.auditType) | \(issue.compactDescription) | label='\(issue.element?.label ?? "-")' frame=\(issue.element?.frame ?? .zero)")
             return false
         }
     }
 
     @MainActor func testMenu() throws {
-        XCTAssertTrue(app.buttons["STATS"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Progress"].waitForExistence(timeout: 10))
         try audit("menu")
     }
 
@@ -35,8 +39,24 @@ final class AccessibilityAuditTests: XCTestCase {
         try audit("settings")
     }
 
+    @MainActor func testPauseCard() throws {
+        XCTAssertTrue(app.buttons["Level 1"].waitForExistence(timeout: 10))
+        app.buttons["Level 1"].tap()
+        app.buttons["Pause"].tap()
+        XCTAssertTrue(app.buttons["Resume"].waitForExistence(timeout: 5))
+        try audit("pause")
+    }
+
+    @MainActor func testPlaying() throws {
+        XCTAssertTrue(app.buttons["Level 1"].waitForExistence(timeout: 10))
+        app.buttons["Level 1"].tap()
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 5))
+        try audit("ready")
+    }
+
     @MainActor func testStats() throws {
-        app.buttons["STATS"].tap()
+        XCTAssertTrue(app.buttons["Progress"].waitForExistence(timeout: 10))
+        app.buttons["Progress"].tap()
         XCTAssertTrue(app.navigationBars["Progress"].waitForExistence(timeout: 5))
         try audit("stats")
     }

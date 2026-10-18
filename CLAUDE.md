@@ -87,7 +87,9 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   when `state` becomes `menu` (the menu is static HTML). `fit()` computes `scaleK` instead of reading layout;
   use `scaleK` for logical-to-CSS-pixel conversion, never read element sizes per frame.
 - **Game state** is a string: `menu` (level select) -> `ready` (ball riding the paddle) -> `play` ->
-  `win` | `over`; `tap()` advances it, `goMenu()` (MENU button, Escape) returns to `menu`. Timed effects live in
+  `win` | `over`, plus `pause` (from ready/play; `pause()`/`resume()`, P or Escape, auto on `visibilitychange`
+  and when the iOS app resigns active via `autoPause()`). `win`/`over`/`pause` show one HTML card (`showCard`)
+  whose first button is the primary action. The loop stops in `menu` and `pause`. Timed effects live in
   `fx` (seconds left) and reset in `update()`. Ball speed is `base` = `SPEED` + level.
 - **Power-ups** are the `POWERS` table: label -> `[pill color, effect fn]`. Add one by adding a row.
 - **Settings** live in `cfg` (`localStorage.bb_cfg`: music, sfx, haptics, shake, paddle 0=follow / >0=drag gain) behind a native `<dialog>`;
@@ -106,17 +108,26 @@ Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based de
   star), `localStorage.bb_best` (best score per level) and `localStorage.bb_mute`. Inside the iOS app the
   first two are overwritten at every launch from SwiftData.
 
+## Languages
+
+`I18N` holds en, fr, de, es, fa (Persian is RTL: `applyLang()` sets `dir`). `t(key, ...args)`; values are
+strings or functions. Static markup uses `data-t` (text) and `data-tl` (aria-label). Language = the setting,
+else `window.nativeLang` (injected by the iOS shell from the phone), else the browser. `test.js` fails if a
+language's key set or function arity differs from English, so add every new string to all five. The native
+Progress screen uses `ios/BrickBreaker/Localizable.xcstrings` (same five languages, follows the phone).
+
 ## Accessibility
 
 Everything a player taps outside the playfield is real HTML, never canvas-drawn: the level select (`goMenu()`
 renders 100 `<button>`s with labels like "Level 4, 2 of 3 stars" / "locked"), mute, settings, STATS, MENU,
-and the settings rows (44px `role=switch` buttons). Sizes use `cqw` so they track the canvas scale. Game
+the settings rows (44px `role=switch` buttons), the HUD (score, level, lives) and the pause/win/over cards. Sizes use `cqw` so they track the canvas scale. Game
 events are announced through the `say()` aria-live region. The playfield is a canvas; **Assisted play**
 (`cfg.assist`) makes it playable without steering: `assist()` moves the paddle under the lowest falling ball,
 and a visible Launch / Next level / Retry button (`#go`) replaces tapping the field. Pinch-zoom is allowed
 everywhere except the canvases (`touch-action:none` only there). `AccessibilityAuditTests` runs Apple's `performAccessibilityAudit` on the menu,
-settings and stats screens; it must stay at zero findings. The only accepted issue (system toolbar buttons
-and Dynamic Type) is filtered in the test with its reason; never filter by skipping audit types.
+settings and stats screens; it must stay at zero findings. Accepted issues are filtered in the test with their reason (system toolbar
+buttons and Dynamic Type; hit-area findings on non-interactive static text/images, which WebKit reports for
+any plain page text); never filter by skipping audit types.
 
 ## Invariants the geometry depends on
 

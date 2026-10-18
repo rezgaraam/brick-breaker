@@ -5,10 +5,10 @@ const fs=require('fs'),assert=require('assert'),vm=require('vm');
 const src=fs.readFileSync(__dirname+'/index.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1];
 const noop=()=>{};
 const ctx2d=new Proxy({},{get:()=>noop,set:()=>true});
-const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,getContext:()=>ctx2d,addEventListener:noop,getBoundingClientRect:()=>({left:0,top:0,width:340,height:600})};
-const g={document:{body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
+const canvas={width:340,height:600,style:{},replaceChildren:noop,append:noop,setAttribute:noop,getContext:()=>ctx2d,addEventListener:noop,getBoundingClientRect:()=>({left:0,top:0,width:340,height:600})};
+const g={document:{documentElement:{},addEventListener:noop,body:{clientWidth:340,clientHeight:600},getElementById:()=>canvas,createElement:()=>({getContext:()=>ctx2d,setAttribute:noop,focus:noop}),querySelectorAll:()=>[]},localStorage:{},addEventListener:noop,requestAnimationFrame:noop,AudioContext:undefined,Math,Infinity,Object,Array,JSON};
 g.window=g; // browsers always have window; the bridge probes window.webkit
-vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg}',g);
+vm.createContext(g);vm.runInContext(src+';this.G={get state(){return state},get left(){return left},get balls(){return balls},get lives(){return lives},get stars(){return stars},set level(v){level=v},pad,tap,update,loadLevel,LEVELS,COLS,cfg,pause,resume,I18N}',g);
 const G=g.G,C=G.COLS,dt=1/60;
 assert.equal(G.LEVELS.length,100);assert.equal(G.state,'menu');
 
@@ -34,9 +34,19 @@ assert.equal(G.left,0);assert(G.stars[G.LEVELS.length-1]>=1,'stars saved on win'
 G.loadLevel();G.tap();
 for(let n=3;n>0;n--){for(let i=0;i<60*20&&G.lives===n;i++){G.pad.x=-999;G.pad.w=1;G.update(dt)}if(G.lives>0){assert.equal(G.state,'ready');G.tap()}}
 assert.equal(G.state,'over');
+// 4. Pause freezes the ball; resume continues.
+G.loadLevel();G.tap();for(let i=0;i<10;i++)G.update(dt);
+G.pause();assert.equal(G.state,'pause');const p0=JSON.stringify([G.balls[0].x,G.balls[0].y]);
+for(let i=0;i<60;i++)G.update(dt);assert.equal(JSON.stringify([G.balls[0].x,G.balls[0].y]),p0,'ball moved while paused');
+G.resume();assert.equal(G.state,'play');G.update(dt);assert.notEqual(JSON.stringify([G.balls[0].x,G.balls[0].y]),p0,'ball frozen after resume');
+
+// 5. Every language has exactly the English keys, with the same kinds (string vs function) and arity.
+const en=G.I18N.en,sig=o=>Object.keys(o).sort().map(k=>k+':'+(typeof o[k]==='function'?'f'+o[k].length:'s')).join();
+for(const[l,o]of Object.entries(G.I18N))assert.equal(sig(o),sig(en),`language ${l} keys differ from en`);
+
 // 3. Assisted play wins the same level with no paddle input at all.
 G.cfg.assist=true;G.loadLevel();G.tap();
 for(let i=0;i<60*1200&&G.state==='play';i++)G.update(dt);
 assert.equal(G.state,'win',`assisted play: ${G.state} with ${G.left} bricks left`);
 G.cfg.assist=false;
-console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, assisted play wins, won a ${total}-brick level, lives drain to game over`);
+console.log(`ok: ${G.LEVELS.length-1} levels valid, menu + stars, pause, ${Object.keys(G.I18N).length} languages, assisted play wins, won a ${total}-brick level, lives drain to game over`);

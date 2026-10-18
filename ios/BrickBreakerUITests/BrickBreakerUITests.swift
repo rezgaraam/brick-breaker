@@ -10,8 +10,8 @@ final class BrickBreakerUITests: XCTestCase {
         let web = app.webViews.firstMatch
         XCTAssertTrue(web.waitForExistence(timeout: 10), "game web view not shown")
         // STATS is a real HTML button the page shows only inside the native shell.
-        let stats = app.buttons["STATS"]
-        XCTAssertTrue(stats.waitForExistence(timeout: 10), "STATS button not exposed by the page")
+        let stats = app.buttons["Progress"]
+        XCTAssertTrue(stats.waitForExistence(timeout: 10), "Progress button not exposed by the page")
         stats.tap()
 
         let opened = app.navigationBars["Progress"].waitForExistence(timeout: 5)
@@ -45,6 +45,34 @@ final class BrickBreakerUITests: XCTestCase {
         sleep(5)
         XCTAssertFalse(app.buttons["Retry"].exists, "assisted paddle lost every ball within 5s")
         // leave the default state for other tests
-        app.buttons["MENU"].tap(); gear.tap(); assist.tap(); app.buttons["Close"].tap()
+        app.buttons["Pause"].tap(); app.buttons["Menu"].tap(); gear.tap(); assist.tap(); app.buttons["Close"].tap()
+    }
+
+    /// Pause stops the game behind a card; Resume brings it back.
+    @MainActor
+    func testPauseAndResume() throws {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["Level 1"].waitForExistence(timeout: 10))
+        app.buttons["Level 1"].tap()
+        app.buttons["Pause"].tap()
+        XCTAssertTrue(app.buttons["Resume"].waitForExistence(timeout: 5), "pause card not shown")
+        XCTAssertTrue(app.buttons["Restart"].exists && app.buttons["Menu"].exists)
+        app.buttons["Resume"].tap()
+        XCTAssertTrue(app.buttons["Resume"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Pause"].exists, "not back in the level")
+        app.buttons["Pause"].tap(); app.buttons["Menu"].tap()
+    }
+
+    /// With the phone in French, both the game (web) and the Progress screen (native) are French.
+    @MainActor
+    func testFrenchLocalization() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_FR"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Réglages"].waitForExistence(timeout: 10), "game did not switch to French")
+        app.buttons["Progrès"].tap()
+        XCTAssertTrue(app.navigationBars["Progrès"].waitForExistence(timeout: 5), "native screen not French")
+        XCTAssertTrue(app.staticTexts["Aucun niveau terminé"].exists || app.staticTexts["Niveaux terminés"].exists)
     }
 }

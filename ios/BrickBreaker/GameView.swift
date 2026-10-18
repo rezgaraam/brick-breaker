@@ -16,7 +16,7 @@ struct GameView: UIViewRepresentable {
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []     // WebAudio starts on the game's own first tap
         config.userContentController.add(context.coordinator, name: "game")
-        config.userContentController.addUserScript(WKUserScript(source: seed(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        addScripts(to: config.userContentController)
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
@@ -29,6 +29,7 @@ struct GameView: UIViewRepresentable {
         webView.isInspectable = true
         #endif
         context.coordinator.reloadToken = reloadToken
+        context.coordinator.webView = webView
         load(webView)
         return webView
     }
@@ -40,8 +41,16 @@ struct GameView: UIViewRepresentable {
         // Progress was reset: re-seed and reload so the page matches the database again.
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: seed(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        addScripts(to: controller)
         load(webView)
+    }
+
+    /// Document-start scripts: the progress seed, and the phone's language (the page's "Automatic" language).
+    private func addScripts(to controller: WKUserContentController) {
+        let lang = (Locale.preferredLanguages.first ?? "en").filter { $0.isLetter || $0 == "-" }
+        for source in [seed(), "window.nativeLang='\(lang)'"] {
+            controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
     }
 
     private func load(_ webView: WKWebView) {
@@ -55,8 +64,23 @@ struct GameView: UIViewRepresentable {
     final class Coordinator: NSObject, WKScriptMessageHandler {
         var onMessage: (GameMessage) -> Void
         var reloadToken = 0
+        weak var webView: WKWebView?
+        private var resignObserver: NSObjectProtocol?
 
-        init(onMessage: @escaping (GameMessage) -> Void) { self.onMessage = onMessage }
+        init(onMessage: @escaping (GameMessage) -> Void) {
+            self.onMessage = onMessage
+            super.init()
+            // Pause the game whenever the app stops being active: background, a call, Control Center, a banner.
+            resignObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                self?.webView?.evaluateJavaScript("autoPause()")
+            }
+        }
+
+        deinit {
+            if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let parsed = GameMessage(body: message.body) else { return }

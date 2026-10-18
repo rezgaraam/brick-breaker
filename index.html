@@ -11,43 +11,75 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Brick Breaker</title>
 <style>
+:root{--g:#5cb948;--ui:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
 html,body{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none}
-body{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-#wrap{position:relative;width:100%;max-width:100%;aspect-ratio:340/600;container-type:inline-size} /* width is set by fit(); cqw = 1% of it */
+body{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#wrap{position:relative;width:100%;max-width:100%;aspect-ratio:340/600;container-type:inline-size;font-family:var(--ui)} /* width set by fit(); 1cqw = 1% of it */
 canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none} /* only the playfield blocks pinch-zoom */#bg{background:#000}
-#wrap button{position:absolute;bottom:0;background:none;border:0;color:#aaa;font:12px monospace;padding:14px 10px;cursor:pointer}
-#mute{left:0}#settings{left:64px}#stats,#home{right:0}#go{left:50%;transform:translateX(-50%);color:#fff;font-size:14px}
-/* Level select is real HTML (VoiceOver, keyboard, hit testing); sizes in cqw mirror the 340-wide logical canvas. */
-#menu{position:absolute;inset:0;background:#000;text-align:center;font-family:monospace}
-#menu h1{position:absolute;top:3.3%;width:100%;margin:0;font-size:7cqw;color:#5cb948}
-#levels{position:absolute;left:1.5%;top:11.5%;width:97%;display:grid;grid-template-columns:repeat(10,1fr);gap:.6cqw}
-#levels button{position:static;aspect-ratio:1;padding:0;border:0;background:#222;color:#fff;font:3.3cqw monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+/* Feedback on press, instantly, no overshoot */
+button:active:not(:disabled){transform:scale(.95);transition:transform .1s ease-out}
+/* Toolbar: round 44px+ icon chips over the playfield */
+.chip{position:absolute;bottom:2cqw;width:12cqw;height:12cqw;min-width:40px;min-height:40px;display:grid;place-items:center;padding:0;border:1px solid rgba(255,255,255,.1);border-radius:50%;background:rgba(255,255,255,.08);backdrop-filter:blur(8px);color:#e6e6e6}
+.chip svg{width:52%;height:52%}#mute .off,#mute[aria-pressed=true] .on{display:none}#mute[aria-pressed=true] .off{display:inline}
+#mute{left:2cqw}#settings{left:16cqw}#stats,#pause{right:2cqw}
+#go{position:absolute;bottom:2cqw;left:50%;translate:-50% 0;height:12cqw;min-height:40px;padding:0 7cqw;border:0;border-radius:6cqw;background:var(--g);color:#06210a;font-weight:700;font-size:4.4cqw}
+#hud{position:absolute;inset:0 0 auto;display:flex;padding:1.2cqw 2cqw;font:600 3.4cqw var(--mono);color:#ddd;pointer-events:none}
+#hud span{flex:1}#hLevel{text-align:center}#hLives{text-align:end;color:#ff6b6b;letter-spacing:.1em}
+#hint{position:absolute;top:73%;width:100%;margin:0;text-align:center;font:800 6.2cqw var(--mono);color:#fff;pointer-events:none}
+/* Level select: real buttons (VoiceOver, keyboard, hit testing) */
+#menu{position:absolute;inset:0;background:#000;text-align:center}
+#menu h1{position:absolute;top:3.3%;width:100%;margin:0;font:800 7.4cqw var(--mono);letter-spacing:.02em;color:var(--g)}
+#levels{position:absolute;left:1.5%;top:11.5%;width:97%;display:grid;grid-template-columns:repeat(10,1fr);gap:.8cqw}
+#levels button{aspect-ratio:1;padding:0;border:1px solid rgba(255,255,255,.07);border-radius:1.6cqw;background:#1c1c1e;color:#fff;font:600 3.4cqw var(--mono);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3cqw}
+#levels button.next{border:2px solid var(--g);background:#13301a}
 #levels button:disabled{background:#0c0c0c;color:#888;cursor:default}
-#levels span{font:2.4cqw serif;color:#fd3;min-height:1em}
+#levels span{font-size:2.3cqw;line-height:1;color:#fd3;min-height:1em;letter-spacing:-.05em}
+/* Cards (pause / win / game over): dimming scrim, panel materializes with scale + opacity, no bounce */
+#card{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.5);backdrop-filter:blur(3px)}
+.panel{width:76%;box-sizing:border-box;padding:6cqw 5.5cqw 5cqw;border:1px solid rgba(255,255,255,.12);border-radius:6cqw;background:rgba(28,28,30,.94);box-shadow:0 18px 50px rgba(0,0,0,.6);color:#f2f2f2;text-align:center;animation:in .24s cubic-bezier(.2,.8,.2,1)}
+@keyframes in{from{opacity:0;transform:scale(.94)}}
+.panel h2{margin:0;font-size:6.4cqw;line-height:1.15;letter-spacing:-.01em;white-space:pre-line}
+#cStars{margin:3cqw 0 0;font-size:11cqw;line-height:1;color:#fd3;letter-spacing:.05em}#cStars i{font-style:normal;color:#48484a}
+#cInfo{margin:2.5cqw 0 1cqw;font:600 3.6cqw var(--mono);color:#b0b0b0}
+.btn{display:block;width:100%;min-height:44px;margin-top:2.6cqw;padding:2.4cqw;border:1px solid rgba(255,255,255,.14);border-radius:3.2cqw;background:rgba(255,255,255,.08);color:#fff;font-weight:600;font-size:4.3cqw}
+.btn.primary{border-color:var(--g);background:var(--g);color:#06210a}.btn.danger{color:#ff6b6b}
+/* Settings sheet */
+dialog{width:min(86vw,320px);box-sizing:border-box;padding:20px;border:1px solid rgba(255,255,255,.12);border-radius:20px;background:rgba(28,28,30,.97);color:#f2f2f2;font:15px var(--ui)}
+dialog[open]{animation:in .24s cubic-bezier(.2,.8,.2,1)}
+dialog::backdrop{background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
+dialog h2{margin:0 0 6px;font-size:20px;letter-spacing:-.01em}
+dialog .btn{font-size:16px;margin-top:10px;padding:10px}
+#opts button{display:flex;justify-content:space-between;align-items:center;gap:20px;width:100%;min-height:44px;margin:0;padding:0 2px;background:none;border:0;border-bottom:1px solid rgba(255,255,255,.08);text-align:start}
+#opts b{color:var(--g);font-weight:600}#opts b.off{color:#8e8e93}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-dialog{background:#111;color:#ddd;border:1px solid #333;font:14px monospace;padding:16px 20px;min-width:220px}
-dialog::backdrop{background:rgba(0,0,0,.6)}
-dialog h2{margin:0 0 8px;font-size:16px;color:#5cb948}
-#opts button{display:flex;justify-content:space-between;align-items:center;gap:24px;width:100%;min-height:44px;margin:0;padding:0 2px;background:none;border:0;border-bottom:1px solid #222;text-align:left}
-#opts b{color:#5cb948;font-weight:normal}#opts b.off{color:#888}
-dialog button{font:inherit;padding:8px 12px;margin-top:10px;background:#222;color:#ddd;border:1px solid #444;cursor:pointer}
-dialog .danger{color:#f66;border-color:#733}
+@media (prefers-reduced-motion:reduce){.panel,dialog[open]{animation:fade .15s}@keyframes fade{from{opacity:0}}button:active:not(:disabled){transform:none}}
+@media (prefers-reduced-transparency:reduce){#card,dialog::backdrop{backdrop-filter:none;background:rgba(0,0,0,.8)}.chip{backdrop-filter:none;background:#1c1c1e}}
 [hidden]{display:none!important}
 </style>
-<div id="wrap"><canvas id="bg" aria-hidden="true"></canvas><canvas id="c" role="img" aria-label="Game field"></canvas>
-  <div id="menu"><h1>BRICK BREAKER</h1><div id="levels" role="group" aria-label="Levels"></div></div>
-  <button id="mute">♪ on</button><button id="settings" aria-label="Settings">⚙</button><button id="stats" hidden>STATS</button><button id="home" hidden>MENU</button><button id="go" hidden></button>
+<div id="wrap"><canvas id="bg" aria-hidden="true"></canvas><canvas id="c" role="img" data-tl="gameField"></canvas>
+  <div id="hud" hidden><span id="hScore"></span><span id="hLevel"></span><span id="hLives" role="img"></span></div>
+  <p id="hint" data-t="tapLaunch" hidden></p>
+  <div id="menu"><h1>BRICK BREAKER</h1><div id="levels" role="group" data-tl="levels"></div></div>
+  <button id="mute" class="chip" data-tl="mute" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  <button id="settings" class="chip" data-tl="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  <button id="stats" class="chip" data-tl="progress" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-8M12 20V5M19 20v-5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></button>
+  <button id="pause" class="chip" data-tl="pause" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
+  <button id="go" data-t="launch" hidden></button>
+  <div id="card" hidden><div class="panel" role="dialog" aria-labelledby="cTitle"><h2 id="cTitle"></h2><p id="cStars" aria-hidden="true"></p><p id="cInfo"></p><div id="cBtns"></div></div></div>
   <p id="say" class="sr" aria-live="polite"></p></div>
-<dialog id="cfg">
-  <h2>Settings</h2>
+<dialog id="cfg" aria-labelledby="cfgTitle">
+  <h2 id="cfgTitle" data-t="settings"></h2>
   <div id="opts"></div>
-  <button id="reset" class="danger">Reset progress</button>
-  <form method="dialog"><button>Close</button></form>
+  <button id="reset" class="btn danger"></button>
+  <form method="dialog"><button class="btn primary" data-t="close"></button></form>
 </dialog>
 <script>
 'use strict';
 const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=340,H=600; // logical size; see fit()
-const $=id=>document.getElementById(id),muteBtn=$('mute'),statsBtn=$('stats'),homeBtn=$('home'),wrap=$('wrap'),menuEl=$('menu'),levelsEl=$('levels'),sayEl=$('say');
+const $=id=>document.getElementById(id),muteBtn=$('mute'),statsBtn=$('stats'),pauseBtn=$('pause'),wrap=$('wrap'),menuEl=$('menu'),levelsEl=$('levels'),sayEl=$('say'),
+  hud=$('hud'),hScore=$('hScore'),hLevel=$('hLevel'),hLives=$('hLives'),hint=$('hint'),cardEl=$('card'),cTitle=$('cTitle'),cStars=$('cStars'),cInfo=$('cInfo'),cBtns=$('cBtns');
 const say=t=>{sayEl.textContent=t}; // spoken by VoiceOver through the aria-live region
 const COLS=56,P=6,GX=2,GY=22,PAD_W=60,SPEED=280,MAX_BALLS=20;
 
@@ -170,14 +202,26 @@ const POWERS={
 },PK=Object.keys(POWERS);
 function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,trail:[],vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
 
-const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true,paddle:0,assist:false},JSON.parse(localStorage.bb_cfg||'{}')),dlg=document.getElementById('cfg');
+const cfg=Object.assign({music:true,sfx:true,haptics:true,shake:true,paddle:0,assist:false,lang:'auto'},JSON.parse(localStorage.bb_cfg||'{}')),dlg=document.getElementById('cfg');
 let stars=JSON.parse(localStorage.bb_stars||'{}'),best=JSON.parse(localStorage.bb_best||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
 const unlocked=i=>i===0||stars[i-1]>0;
+// ---- Languages. t(key, ...args): strings or functions; missing keys fall back to English. test.js checks every
+// language has exactly the English key set. Persian is right-to-left (applyLang sets dir).
+const I18N={
+  en:{settings:'Settings',music:'Music',sfx:'Sound effects',haptics:'Haptics',shake:'Screen shake',paddle:'Paddle',follow:'Follow finger',drag:n=>`Drag ${n}x`,assist:'Assisted play',language:'Language',auto:'Automatic',on:'On',off:'Off',reset:'Reset progress',confirmReset:'Tap again to confirm',close:'Close',progress:'Progress',pause:'Pause',paused:'Paused',resume:'Resume',restart:'Restart',menu:'Menu',launch:'Launch',next:'Next level',retry:'Retry',levelN:n=>`Level ${n}`,levelStars:(n,s)=>`Level ${n}, ${s} of 3 stars`,locked:n=>`Level ${n}, locked`,score:'SCORE',best:'BEST',levelHud:'LEVEL',tapLaunch:'TAP TO LAUNCH',combo:'COMBO x',congrats:'Congratulations',youWin:'You win!',gameOver:'Game over',allDone:'All levels done!',sayStart:n=>`Level ${n}. Tap to launch.`,sayLost:l=>`Ball lost. ${l} lives left.`,sayWin:(s,c)=>`Level cleared. ${s} of 3 stars. Score ${c}.`,sayOver:c=>`Game over. Score ${c}.`,gameField:'Game field',mute:'Mute',levels:'Levels',livesN:n=>`${n} lives`},
+  fr:{settings:'Réglages',music:'Musique',sfx:'Effets sonores',haptics:'Vibrations',shake:'Tremblement de l’écran',paddle:'Raquette',follow:'Suivre le doigt',drag:n=>`Glisser ${n}x`,assist:'Jeu assisté',language:'Langue',auto:'Automatique',on:'Oui',off:'Non',reset:'Réinitialiser la progression',confirmReset:'Touchez encore pour confirmer',close:'Fermer',progress:'Progrès',pause:'Pause',paused:'En pause',resume:'Reprendre',restart:'Recommencer',menu:'Menu',launch:'Lancer',next:'Niveau suivant',retry:'Réessayer',levelN:n=>`Niveau ${n}`,levelStars:(n,s)=>`Niveau ${n}, ${s} étoiles sur 3`,locked:n=>`Niveau ${n}, verrouillé`,score:'SCORE',best:'RECORD',levelHud:'NIVEAU',tapLaunch:'TOUCHEZ POUR LANCER',combo:'COMBO x',congrats:'Félicitations',youWin:'Vous avez gagné !',gameOver:'Partie terminée',allDone:'Tous les niveaux sont terminés !',sayStart:n=>`Niveau ${n}. Touchez pour lancer.`,sayLost:l=>`Balle perdue. Encore ${l} vies.`,sayWin:(s,c)=>`Niveau terminé. ${s} étoiles sur 3. Score ${c}.`,sayOver:c=>`Partie terminée. Score ${c}.`,gameField:'Terrain de jeu',mute:'Couper le son',levels:'Niveaux',livesN:n=>`${n} vies`},
+  de:{settings:'Einstellungen',music:'Musik',sfx:'Soundeffekte',haptics:'Haptik',shake:'Bildschirmwackeln',paddle:'Schläger',follow:'Finger folgen',drag:n=>`Ziehen ${n}x`,assist:'Unterstütztes Spielen',language:'Sprache',auto:'Automatisch',on:'An',off:'Aus',reset:'Fortschritt zurücksetzen',confirmReset:'Zum Bestätigen erneut tippen',close:'Schließen',progress:'Fortschritt',pause:'Pause',paused:'Pausiert',resume:'Weiter',restart:'Neu starten',menu:'Menü',launch:'Starten',next:'Nächstes Level',retry:'Nochmal',levelN:n=>`Level ${n}`,levelStars:(n,s)=>`Level ${n}, ${s} von 3 Sternen`,locked:n=>`Level ${n}, gesperrt`,score:'PUNKTE',best:'REKORD',levelHud:'LEVEL',tapLaunch:'TIPPEN ZUM STARTEN',combo:'KOMBO x',congrats:'Glückwunsch',youWin:'Gewonnen!',gameOver:'Spiel vorbei',allDone:'Alle Level geschafft!',sayStart:n=>`Level ${n}. Tippen zum Starten.`,sayLost:l=>`Ball verloren. Noch ${l} Leben.`,sayWin:(s,c)=>`Level geschafft. ${s} von 3 Sternen. ${c} Punkte.`,sayOver:c=>`Spiel vorbei. ${c} Punkte.`,gameField:'Spielfeld',mute:'Stumm',levels:'Level',livesN:n=>`${n} Leben`},
+  es:{settings:'Ajustes',music:'Música',sfx:'Efectos de sonido',haptics:'Vibración',shake:'Temblor de pantalla',paddle:'Pala',follow:'Seguir el dedo',drag:n=>`Arrastrar ${n}x`,assist:'Juego asistido',language:'Idioma',auto:'Automático',on:'Sí',off:'No',reset:'Restablecer progreso',confirmReset:'Toca de nuevo para confirmar',close:'Cerrar',progress:'Progreso',pause:'Pausa',paused:'En pausa',resume:'Continuar',restart:'Reiniciar',menu:'Menú',launch:'Lanzar',next:'Siguiente nivel',retry:'Reintentar',levelN:n=>`Nivel ${n}`,levelStars:(n,s)=>`Nivel ${n}, ${s} de 3 estrellas`,locked:n=>`Nivel ${n}, bloqueado`,score:'PUNTOS',best:'RÉCORD',levelHud:'NIVEL',tapLaunch:'TOCA PARA LANZAR',combo:'COMBO x',congrats:'¡Felicidades!',youWin:'¡Has ganado!',gameOver:'Fin del juego',allDone:'¡Todos los niveles completados!',sayStart:n=>`Nivel ${n}. Toca para lanzar.`,sayLost:l=>`Bola perdida. Quedan ${l} vidas.`,sayWin:(s,c)=>`Nivel completado. ${s} de 3 estrellas. ${c} puntos.`,sayOver:c=>`Fin del juego. ${c} puntos.`,gameField:'Campo de juego',mute:'Silenciar',levels:'Niveles',livesN:n=>`${n} vidas`},
+  fa:{settings:'تنظیمات',music:'موسیقی',sfx:'جلوه‌های صوتی',haptics:'بازخورد لمسی',shake:'لرزش صفحه',paddle:'راکت',follow:'دنبال کردن انگشت',drag:n=>`کشیدن ×${n}`,assist:'بازی با کمک',language:'زبان',auto:'خودکار',on:'روشن',off:'خاموش',reset:'بازنشانی پیشرفت',confirmReset:'برای تأیید دوباره بزنید',close:'بستن',progress:'پیشرفت',pause:'توقف',paused:'متوقف شد',resume:'ادامه',restart:'شروع دوباره',menu:'منو',launch:'پرتاب',next:'مرحله بعد',retry:'تلاش دوباره',levelN:n=>`مرحله ${n}`,levelStars:(n,s)=>`مرحله ${n}، ${s} از ۳ ستاره`,locked:n=>`مرحله ${n}، قفل`,score:'امتیاز',best:'بهترین',levelHud:'مرحله',tapLaunch:'برای پرتاب بزنید',combo:'کمبو x',congrats:'تبریک!',youWin:'بردید!',gameOver:'بازی تمام شد',allDone:'همه مراحل تمام شد!',sayStart:n=>`مرحله ${n}. برای پرتاب بزنید.`,sayLost:l=>`توپ از دست رفت. ${l} جان باقی است.`,sayWin:(s,c)=>`مرحله تمام شد. ${s} از ۳ ستاره. امتیاز ${c}.`,sayOver:c=>`بازی تمام شد. امتیاز ${c}.`,gameField:'زمین بازی',mute:'بی‌صدا',levels:'مراحل',livesN:n=>`${n} جان`},
+};
+const LANG_NAMES={en:'English',fr:'Français',de:'Deutsch',es:'Español',fa:'فارسی'},LANG_KEYS=['auto',...Object.keys(LANG_NAMES)];
+let lang='en';
+function t(k,...a){const v=I18N[lang]?.[k]??I18N.en[k];return typeof v==='function'?v(...a):v}
 // Native shell bridge (the iOS app). Every call is a no-op in a plain browser.
 const native=m=>{try{window.webkit?.messageHandlers?.game?.postMessage(m)}catch{}},inApp=()=>!!window.webkit?.messageHandlers?.game;
 let lastHap=0;function haptic(){try{if(!cfg.haptics)return;const t=performance.now();if(t-lastHap<60)return;lastHap=t;native({type:'haptic'})}catch{}}
 let grid=[],ROWS=0,left=0,balls=[],pows=[],parts=[],fx={pad:0,speed:0,fire:0},keys={};
-const pad={x:W/2-PAD_W/2,y:H-50,w:PAD_W,h:8};
+const pad={x:W/2-PAD_W/2,y:H-100,w:PAD_W,h:8}; // 100 up from the bottom so the thumb sits below the paddle, not on it
 // Bricks live on an offscreen layer; a cell is repainted only when it changes.
 // Two stacked canvases: bricks on #bg (repainted per changed cell), everything that moves on #c (cleared each
 // frame). The browser composites them; copying the full-res brick layer every frame was the frame-time bottleneck.
@@ -197,7 +241,7 @@ function loadLevel(){
   const m=LEVELS[level];ROWS=m.length;grid=[];left=0;
   m.forEach((row,r)=>[...row].forEach((ch,c)=>{const hp=ch==='.'?0:ch==='#'?Infinity:+ch;grid[r*COLS+c]=hp;if(hp&&hp<Infinity)left++}));
   bctx.clearRect(0,0,W,H);for(let i=0;i<grid.length;i++)paint(i);
-  lives=3;score=0;base=SPEED+level;resetBall();say(`Level ${level+1}. Tap to launch.`);wake();
+  lives=3;score=0;base=SPEED+level;resetBall();hideCard();say(t('sayStart',level+1));wake();
 }
 function resetBall(){
   pows=[];pad.w=PAD_W;fx={pad:0,speed:0,fire:0};speed=base;
@@ -242,8 +286,8 @@ function music(){
   const band=level/10|0,[B,A]=SONGS[band%SONGS.length],tr=[0,3,5,7][band%4],dur=.125*(1-level/500);
   while(nextNote<ac.currentTime+.1){const t=Math.max(nextNote,ac.currentTime),f=110*2**((B[step]+tr)/12),a=f*2**(A[step]/12);tone(f,f,dur,'square',.03,t);tone(a,a,dur*.65,'triangle',.02,t);nextNote=t+dur;step=(step+1)%16}
 }
-function toggleMute(){muted=!muted;localStorage.bb_mute=muted?'1':'0';muteBtn.textContent=muted?'♪ off':'♪ on'}
-muteBtn.textContent=muted?'♪ off':'♪ on';
+function toggleMute(){muted=!muted;localStorage.bb_mute=muted?'1':'0';muteBtn.setAttribute('aria-pressed',String(muted))}
+muteBtn.setAttribute('aria-pressed',String(muted));
 
 // Circle vs rect. Returns the contact normal only if the ball is moving into the rect.
 function hit(b,x,y,w,h){
@@ -286,7 +330,7 @@ function assist(){
   if(t)pad.x=t.x-pad.w/2+assistOff*pad.w;
 }
 function update(dt){
-  if(state==='menu'||dlg.open)return; // settings dialog pauses the game
+  if(state==='menu'||state==='pause'||dlg.open)return; // paused, or settings open
   if(cfg.assist&&state==='play')assist();
   shake=Math.max(0,shake-dt*30);
   pad.x+=((keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0))*400*dt;
@@ -297,8 +341,8 @@ function update(dt){
     music();
     for(const b of balls){b.trail.push({x:b.x,y:b.y});if(b.trail.length>8)b.trail.shift();const n=Math.ceil(speed*dt/3);for(let i=0;i<n;i++){b.x+=b.vx*dt/n;b.y+=b.vy*dt/n;collide(b)}}
     balls=balls.filter(b=>b.y<H+b.r);
-    if(!balls.length){lives--;sfx('lose');jolt(8);if(lives<=0){state='over';say(`Game over. Score ${score}.`)}else{resetBall();say(`Ball lost. ${lives} lives left.`)}}
-    else if(!left){state='win';const s=Math.min(3,lives);stars[level]=Math.max(stars[level]||0,s);best[level]=Math.max(best[level]||0,score);localStorage.bb_stars=JSON.stringify(stars);localStorage.bb_best=JSON.stringify(best);native({type:'level',level,stars:s,score});sfx('win');burst();say(`Level cleared. ${s} of 3 stars. Score ${score}.`)}
+    if(!balls.length){lives--;sfx('lose');jolt(8);if(lives<=0){state='over';showCard('over');say(t('sayOver',score))}else{resetBall();say(t('sayLost',lives))}}
+    else if(!left){state='win';const s=Math.min(3,lives);stars[level]=Math.max(stars[level]||0,s);best[level]=Math.max(best[level]||0,score);localStorage.bb_stars=JSON.stringify(stars);localStorage.bb_best=JSON.stringify(best);native({type:'level',level,stars:s,score});sfx('win');burst();showCard('win');say(t('sayWin',s,score))}
     for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;jolt(2);sfx(POWERS[p.t][0]==='#f80'?'bad':'power')}}
     pows=pows.filter(p=>p.y<H);
   }
@@ -307,21 +351,42 @@ function update(dt){
 }
 
 function goMenu(){
-  state='menu';
+  state='menu';hideCard();
   levelsEl.replaceChildren(...LEVELS.map((_,i)=>{
     const b=document.createElement('button'),ok=unlocked(i),n=stars[i]||0;
-    b.disabled=!ok;b.innerHTML=`${i+1}<span aria-hidden="true">${'★'.repeat(n)}</span>`;
-    b.setAttribute('aria-label',ok?`Level ${i+1}`+(n?`, ${n} of 3 stars`:''):`Level ${i+1}, locked`);
+    b.disabled=!ok;b.className=ok&&!n?'next':'';b.innerHTML=`${i+1}<span aria-hidden="true">${'★'.repeat(n)}</span>`;
+    b.setAttribute('aria-label',!ok?t('locked',i+1):n?t('levelStars',i+1,n):t('levelN',i+1));
     b.onclick=()=>{level=i;loadLevel()};return b;
   }));
   draw(); // one frame to set the menu's button visibility; the loop is stopped here
 }
-const GO={ready:'Launch',win:'Next level',over:'Retry'},goBtn=$('go');
+// Cards: one panel for pause, win and game over; real buttons, first one is the primary action and gets focus.
+let cardKind='',before='play';
+function showCard(kind){
+  cardKind=kind;const s=Math.min(3,lives),last=level+1>=LEVELS.length;
+  cTitle.textContent=kind==='pause'?t('paused'):kind==='over'?t('gameOver'):last?t('allDone'):`${t('congrats')}\n${t('youWin')}`;
+  cStars.hidden=kind!=='win';cStars.innerHTML='★'.repeat(s)+`<i>${'★'.repeat(3-s)}</i>`;
+  cInfo.textContent=kind==='pause'?`${t('levelN',level+1)} · ${t('score')} ${score}`:`${t('score')} ${score} · ${t('best')} ${best[level]||0}`;
+  const next=()=>{level++;loadLevel()},acts={pause:[['resume',resume],['restart',loadLevel],['menu',goMenu]],
+    win:last?[['menu',goMenu],['retry',loadLevel]]:[['next',next],['retry',loadLevel],['menu',goMenu]],over:[['retry',loadLevel],['menu',goMenu]]}[kind];
+  cBtns.replaceChildren(...acts.map(([k,f],i)=>{const b=document.createElement('button');b.className=i?'btn':'btn primary';b.textContent=t(k);b.onclick=()=>f();return b}));
+  cardEl.hidden=false;cBtns.firstChild?.focus?.();
+}
+function hideCard(){cardEl.hidden=true;cardKind=''}
+function pause(){if(state!=='play'&&state!=='ready')return;before=state;state='pause';showCard('pause');draw()}
+function resume(){if(state!=='pause')return;hideCard();state=before;wake()}
+function autoPause(){if(state==='play')pause()} // also called by the iOS shell when the app resigns active
+document.addEventListener('visibilitychange',()=>{if(document.hidden)autoPause()});
+const goBtn=$('go');let hudLives=-1;
 function draw(){
-  const g=cfg.assist&&GO[state]||'';goBtn.hidden=!g;if(g&&goBtn.textContent!==g)goBtn.textContent=g;
-  menuEl.hidden=state!=='menu';homeBtn.hidden=state==='menu';
-  statsBtn.hidden=!(inApp()&&state==='menu');
+  goBtn.hidden=!(cfg.assist&&state==='ready');hint.hidden=!(state==='ready'&&!cfg.assist);
+  menuEl.hidden=state!=='menu';hud.hidden=state==='menu';
+  statsBtn.hidden=!(inApp()&&state==='menu');pauseBtn.hidden=!(state==='play'||state==='ready');
   if(state==='menu')return;
+  // HUD is HTML (readable by VoiceOver, translated); text is only written when it changes
+  const hs=`${t('score')} ${score}`,hl=`${t('levelHud')} ${level+1}`;
+  if(hScore.textContent!==hs)hScore.textContent=hs;if(hLevel.textContent!==hl)hLevel.textContent=hl;
+  if(hudLives!==lives){hudLives=lives;hLives.textContent='♥'.repeat(lives);hLives.setAttribute('aria-label',t('livesN',lives))}
   ctx.clearRect(0,0,W,H);
   const sx=shake>0?(Math.random()-.5)*shake:0,sy=shake>0?(Math.random()-.5)*shake:0,k=scaleK;
   ctx.save();ctx.translate(sx,sy);bg.style.transform=sx||sy?`translate(${sx*k}px,${sy*k}px)`:'';
@@ -332,31 +397,13 @@ function draw(){
   for(const b of balls){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fill()}
   ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 9px monospace';
   for(const p of pows){ctx.fillStyle=POWERS[p.t][0];ctx.beginPath();ctx.arc(p.x,p.y,9,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.fillText(p.t,p.x,p.y+1)}
-  ctx.fillStyle='#ddd';ctx.font='11px monospace';
-  ctx.textAlign='left';ctx.fillText('SCORE '+score,6,11);
-  ctx.textAlign='center';ctx.fillText('LEVEL '+(level+1),W/2,11);
-  ctx.textAlign='right';ctx.fillText('♥'.repeat(lives),W-6,11);
-  if(combo>=5&&state==='play'){ctx.textAlign='center';ctx.font='bold 16px monospace';ctx.fillStyle='#fd3';ctx.fillText('COMBO x'+combo,W/2,440)}
-  ctx.textAlign='center';ctx.font='bold 22px monospace';
-  if(state==='ready'){ctx.fillStyle='#fff';ctx.fillText('TAP TO LAUNCH',W/2,H-110)}
-  else if(state!=='play'){
-    ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';
-    if(state==='over'){ctx.fillText('GAME OVER',W/2,H/2-20);ctx.font='14px monospace';ctx.fillText('Tap to retry',W/2,H/2+20)}
-    else{
-      ctx.fillText('Congratulations',W/2,H/2-60);ctx.fillText('You win!',W/2,H/2-30);
-      ctx.font='44px serif';const s=Math.min(3,lives);
-      for(let i=0;i<3;i++){ctx.fillStyle=i<s?'#fd3':'#444';ctx.fillText('★',W/2+(i-1)*48,H/2+30)}
-      ctx.fillStyle='#fff';ctx.font='14px monospace';ctx.fillText('SCORE '+score+'   BEST '+(best[level]||0),W/2,H/2+70);ctx.fillText(level+1<LEVELS.length?'Tap for next level':'All levels done!',W/2,H/2+95);
-    }
-  }
+  if(combo>=5&&state==='play'){ctx.textAlign='center';ctx.font='bold 16px monospace';ctx.fillStyle='#fd3';ctx.fillText(t('combo')+combo,W/2,430)}
   for(const p of parts){ctx.fillStyle=p.c||'#fff';ctx.globalAlpha=Math.min(1,p.t*2);ctx.fillRect(p.x-1,p.y-1,p.s||2,p.s||2)}
   ctx.globalAlpha=1;ctx.restore();
 }
 
 function tap(){
   if(state==='ready'){const a=(.2+Math.random()*.4)*(Math.random()<.5?-1:1),b=balls[0];b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);state='play';sfx('paddle');try{navigator.wakeLock?.request('screen').catch(()=>{})}catch{}}
-  else if(state==='win'){if(level+1<LEVELS.length){level++;loadLevel()}else goMenu()}
-  else if(state==='over'){score=0;loadLevel()}
 }
 const toXY=e=>{const r=cv.getBoundingClientRect(),k=W/r.width;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
 // Paddle control: follow the pointer, or (cfg.paddle > 0) move relative to the drag, scaled.
@@ -366,26 +413,32 @@ cv.addEventListener('pointerdown',e=>{
   const[x,y]=toXY(e);
   lastPX=x;if(!(cfg.paddle>0))pad.x=x-pad.w/2;tap();
 });
-addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')goMenu();if(e.key==='m')toggleMute()});
+addEventListener('keydown',e=>{
+  keys[e.key]=1;if(dlg.open)return;
+  if(e.key===' '){e.preventDefault();cardKind?cBtns.firstChild?.click():tap()}
+  else if(e.key==='p'||e.key==='Escape'){if(state==='pause')resume();else if(state==='play'||state==='ready')pause();else if(e.key==='Escape'&&cardKind)goMenu()}
+  else if(e.key==='m')toggleMute();
+});
 addEventListener('keyup',e=>{keys[e.key]=0});
-muteBtn.onclick=toggleMute;homeBtn.onclick=goMenu;goBtn.onclick=()=>tap();statsBtn.onclick=()=>native({type:'stats'});
+muteBtn.onclick=toggleMute;pauseBtn.onclick=pause;goBtn.onclick=()=>tap();statsBtn.onclick=()=>native({type:'stats'});
 // Settings dialog: toggles persist in localStorage; reset clears progress (through the shell on iOS).
 // Nothing half-visible behind the modal dialog; tied to its own open/close, not to the (possibly stopped) loop.
 document.getElementById('settings').onclick=()=>{dlg.showModal();wrap.style.visibility='hidden'};
 dlg.onclose=()=>{wrap.style.visibility=''};
-// Each setting is one full-width 44px button: role=switch for on/off, a cycling button for the paddle mode.
-const PADS={0:'Follow finger',1:'Drag 1x',1.5:'Drag 1.5x',2:'Drag 2x'},saveCfg=()=>{localStorage.bb_cfg=JSON.stringify(cfg)};
-$('opts').append(...[['music','Music'],['sfx','Sound effects'],['haptics','Haptics'],['shake','Screen shake'],['paddle','Paddle'],['assist','Assisted play']]
-  .filter(([k])=>k!=='haptics'||inApp()).map(([k,name])=>{
-    const b=document.createElement('button');b.type='button';
-    const show=()=>{const v=cfg[k];if(k==='paddle'){b.innerHTML=`${name}<b>${PADS[v]}</b>`;b.setAttribute('aria-label',`Paddle control, ${PADS[v]}`)}
-      else{b.setAttribute('role','switch');b.setAttribute('aria-checked',String(v));b.innerHTML=`${name}<b class="${v?'':'off'}" aria-hidden="true">${v?'ON':'OFF'}</b>`}};
-    b.onclick=()=>{const ks=Object.keys(PADS).map(Number);cfg[k]=k==='paddle'?ks[(ks.indexOf(cfg[k])+1)%ks.length]:!cfg[k];saveCfg();show()};
-    show();return b;
-  }));
+// Each setting is one full-width 44px button: role=switch for on/off, a cycling button for paddle mode and language.
+const PADS=[0,1,1.5,2],saveCfg=()=>{localStorage.bb_cfg=JSON.stringify(cfg)},optShow=[];
+const cycle=(list,v)=>list[(list.indexOf(v)+1)%list.length];
+$('opts').append(...['music','sfx','haptics','shake','paddle','assist','lang'].filter(k=>k!=='haptics'||inApp()).map(k=>{
+  const b=document.createElement('button');b.type='button';
+  const show=()=>{const v=cfg[k],name=t(k==='lang'?'language':k);
+    if(k==='paddle'||k==='lang'){const val=k==='paddle'?(v?t('drag',v):t('follow')):LANG_NAMES[v]||t('auto');b.innerHTML=`<span>${name}</span><b>${val}</b>`;b.setAttribute('aria-label',`${name}, ${val}`)}
+    else{b.setAttribute('role','switch');b.setAttribute('aria-checked',String(v));b.innerHTML=`<span>${name}</span><b class="${v?'':'off'}" aria-hidden="true">${t(v?'on':'off')}</b>`}};
+  b.onclick=()=>{cfg[k]=k==='paddle'?cycle(PADS,cfg[k]):k==='lang'?cycle(LANG_KEYS,cfg[k]):!cfg[k];saveCfg();k==='lang'?applyLang():show()};
+  optShow.push(show);show();return b;
+}));
 const resetBtn=document.getElementById('reset');let armed=0;
 resetBtn.onclick=()=>{
-  if(!armed){resetBtn.textContent='Tap again to confirm';armed=setTimeout(()=>{armed=0;resetBtn.textContent='Reset progress'},3000);return}
+  if(!armed){resetBtn.textContent=t('confirmReset');armed=setTimeout(()=>{armed=0;resetBtn.textContent=t('reset')},3000);return}
   clearTimeout(armed);if(inApp())native({type:'reset'});else{delete localStorage.bb_stars;delete localStorage.bb_best;location.reload()}
 };
 addEventListener('resize',()=>{fit();for(let i=0;i<grid.length;i++)paint(i)});
@@ -393,9 +446,19 @@ addEventListener('resize',()=>{fit();for(let i=0;i<grid.length;i++)paint(i)});
 let last=0;
 // The loop only runs while a level is on screen; the menu is static HTML, so it stops there (battery).
 let running=false;
-function loop(t){const dt=last?Math.min((t-last)/1000,1/30):0;last=t;update(dt);draw();if(state==='menu'){running=false;return}requestAnimationFrame(loop)}
+function loop(now){const dt=last?Math.min((now-last)/1000,1/30):0;last=now;update(dt);draw();if(state==='menu'||state==='pause'){running=false;return}requestAnimationFrame(loop)}
 function wake(){if(!running){running=true;last=0;requestAnimationFrame(loop)}}
-goMenu();
+// Language: the setting, else the iOS shell's language (window.nativeLang), else the browser's; unknown -> English.
+function applyLang(){
+  const want=cfg.lang!=='auto'?cfg.lang:String(globalThis.nativeLang||globalThis.navigator?.language||'en').slice(0,2).toLowerCase();
+  lang=I18N[want]?want:'en';
+  const root=document.documentElement;root.lang=lang;root.dir=lang==='fa'?'rtl':'ltr';
+  document.querySelectorAll('[data-t]').forEach(e=>{e.textContent=t(e.dataset.t)});
+  document.querySelectorAll('[data-tl]').forEach(e=>e.setAttribute('aria-label',t(e.dataset.tl)));
+  optShow.forEach(f=>f());resetBtn.textContent=t('reset');hudLives=-1;
+  if(state==='menu')goMenu();else if(cardKind)showCard(cardKind);else draw();
+}
+applyLang(); // first render: builds the menu in the right language
 try{navigator.serviceWorker?.register('sw.js')}catch{}
 </script>
 </html>
