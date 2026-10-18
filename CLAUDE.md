@@ -15,7 +15,14 @@ open index.html        # run: no server needed, reload the tab after edits
 node test.js           # the main test: DOM-stubbed smoke test, ~5s, exits non-zero on failure
 python3 -m http.server 8000   # needed only to exercise the service worker (no SW on file://)
 node pwa-check.js "$CHROMIUM" .   # PWA check: manifest, SW install, offline reload (see file header)
+ios/check.sh                      # iOS: package tests (swift test) + simulator build (+ UI test if a sim is booted)
 ```
+
+iOS from the CLI: `cd ios && xcodegen generate` (the .xcodeproj is gitignored, regenerate after editing
+`project.yml`), then build with `-destination 'generic/platform=iOS Simulator' -derivedDataPath build` and
+install with `xcrun simctl install <udid> build/Build/Products/Debug-iphonesimulator/BrickBreaker.app`.
+On this machine xcodebuild does not resolve concrete simulators by name, so use the generic destination
+plus `simctl` rather than `-destination name=...`.
 
 Headless render of a given level (Playwright's cached Chromium, no npm package needed):
 
@@ -34,6 +41,25 @@ the next load with no version bump, and the cache only answers when the network 
 `sw.js` only when its `FILES` list changes. Registration and the screen wake lock in `index.html` are
 behind `?.` and try/catch so `file://` and the headless test stay quiet.
 
+## iOS app (`ios/`)
+
+Native shell around the same `index.html`; the file is a bundle resource referenced from `project.yml`,
+never copied into git. Two parts, per the stack-ios shape:
+
+- `BrickBreakerCore` Swift package: `LevelResult` (SwiftData `@Model`, one row per cleared level: stars,
+  best score), `ProgressStore` (upsert that only raises stars/score, `reset()`, and `seedScript()` which
+  emits the JS that primes the page's localStorage from the database), `GameMessage` (parses what the page
+  posts; malformed bodies are dropped). Tested with Swift Testing on macOS: `swift test` in that folder.
+- App target: `GameView` (WKWebView, injects the seed at document start, forwards `webkit.messageHandlers.game`
+  bodies), `ContentView` (routes messages: record level, haptic via `sensoryFeedback`, open stats sheet;
+  bumps `reloadToken` after a reset so the page re-seeds), `StatsView` (`@Query` over the same store,
+  reset with confirmation). The database is the source of truth; the page's localStorage is a cache.
+
+The bridge on the web side is `native(...)`, `inApp()` and `haptic()` in `index.html`; every call is a
+no-op in a browser, so the web build never notices the shell. `BrickBreakerUITests` is the end-to-end
+proof: it launches the app on a simulator, taps the page's STATS button and expects the native sheet.
+Run it with `xcodebuild test ... -destination "id=<booted udid>"` (name-based destinations do not resolve here).
+
 ## Architecture (all in index.html, read top to bottom)
 
 - **Levels** are arrays of 56-char strings: `.` empty, `1` green, `2` two-hit, `#` steel (hp `Infinity`).
@@ -45,6 +71,10 @@ behind `?.` and try/catch so `file://` and the headless test stay quiet.
   and drives the win check, so anything that removes a brick must decrement it.
 - **Bricks are drawn once** onto the offscreen canvas `bg`; `paint(i)` repaints a single cell. Every
   frame only blits `bg` then draws balls, paddle, pills, particles, HUD. Never draw bricks per frame.
+- **Coordinates are logical 340x600** (`W`, `H`). `fit()` sizes both canvases' backing stores to the
+  on-screen size in device pixels and sets a transform, so game code never sees device pixels. The `#wrap`
+  div fills the screen while keeping the aspect ratio; mute and STATS are real HTML buttons on top of the
+  canvas (accessible, and visible to XCUITest), not canvas text.
 - **Collision**: balls move in <=3px substeps; `collide()` checks only the grid cells under the ball's
   bounding box. `hit()` returns a contact normal only when the ball is moving *into* the rect, and
   `bounce()` sets the sign of a velocity component rather than negating it, so a second overlap on the
@@ -58,7 +88,8 @@ behind `?.` and try/catch so `file://` and the headless test stay quiet.
   16-step pattern 100ms ahead of the audio clock from `update()`. Everything audio is inside try/catch so
   headless runs (no `AudioContext`) stay silent.
 - Persistence: `localStorage.bb_stars` (JSON `{levelIndex: stars}`, level i unlocks when i-1 has a
-  star) and `localStorage.bb_mute`.
+  star), `localStorage.bb_best` (best score per level) and `localStorage.bb_mute`. Inside the iOS app the
+  first two are overwritten at every launch from SwiftData.
 
 ## Invariants the geometry depends on
 

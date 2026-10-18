@@ -1,0 +1,56 @@
+name: BrickBreaker
+options:
+  bundleIdPrefix: com.rezgaraam
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  BrickBreakerCore:
+    path: BrickBreakerCore
+targets:
+  BrickBreaker:
+    type: application
+    platform: iOS
+    sources:
+      - path: BrickBreaker
+      - path: ../index.html          # the game itself; copied into the bundle, never duplicated in git
+        buildPhase: resources
+    dependencies:
+      - package: BrickBreakerCore
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: BrickBreaker/Info.plist
+      properties:
+        CFBundleDisplayName: Brick Breaker
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown]
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: false
+        ITSAppUsesNonExemptEncryption: false
+  BrickBreakerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [BrickBreakerUITests]
+    dependencies:
+      - target: BrickBreaker
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  BrickBreaker:
+    build:
+      targets:
+        BrickBreaker: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [BrickBreakerUITests]

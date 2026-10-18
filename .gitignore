@@ -1,0 +1,7 @@
+ios/BrickBreaker.xcodeproj/
+ios/BrickBreaker/Info.plist
+ios/BrickBreakerCore/.build/
+ios/BrickBreakerCore/.swiftpm/
+*.xcuserdatad/
+.DS_Store
+ios/build/

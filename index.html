@@ -12,12 +12,16 @@
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;overscroll-behavior:none}
 body{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-canvas{background:#000;max-width:100%;max-height:100%;aspect-ratio:340/600;image-rendering:pixelated}
+#wrap{position:relative;width:min(100%,calc((100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))*340/600));aspect-ratio:340/600}
+canvas{display:block;width:100%;height:100%;background:#000}
+#wrap button{position:absolute;bottom:0;background:none;border:0;color:#aaa;font:12px monospace;padding:14px 10px;cursor:pointer}
+#mute{left:0}#stats{right:0}
 </style>
-<canvas id="c" width="340" height="600"></canvas>
+<div id="wrap"><canvas id="c"></canvas><button id="mute">♪ on</button><button id="stats" hidden>STATS</button></div>
 <script>
 'use strict';
-const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=cv.width,H=cv.height;
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=340,H=600; // logical size; see fit()
+const muteBtn=document.getElementById('mute'),statsBtn=document.getElementById('stats');
 const COLS=56,P=6,GX=2,GY=22,PAD_W=60,SPEED=280,MAX_BALLS=20;
 
 // Level maps: . empty, 1 green, 2 two-hit, # steel (unbreakable). 56 columns of 5px bricks.
@@ -136,12 +140,18 @@ const POWERS={
 },PK=Object.keys(POWERS);
 function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
 
-let stars=JSON.parse(localStorage.bb_stars||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
+let stars=JSON.parse(localStorage.bb_stars||'{}'),best=JSON.parse(localStorage.bb_best||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
 const unlocked=i=>i===0||stars[i-1]>0;
+// Native shell bridge (the iOS app). Every call is a no-op in a plain browser.
+const native=m=>{try{window.webkit?.messageHandlers?.game?.postMessage(m)}catch{}},inApp=()=>!!window.webkit?.messageHandlers?.game;
+let lastHap=0;function haptic(){try{const t=performance.now();if(t-lastHap<60)return;lastHap=t;native({type:'haptic'})}catch{}}
 let grid=[],ROWS=0,left=0,balls=[],pows=[],parts=[],fx={pad:0,speed:0,fire:0},keys={};
 const pad={x:W/2-PAD_W/2,y:H-50,w:PAD_W,h:8};
 // Bricks live on an offscreen layer; a cell is repainted only when it changes.
-const bg=document.createElement('canvas');bg.width=W;bg.height=H;const bctx=bg.getContext('2d');
+const bg=document.createElement('canvas'),bctx=bg.getContext('2d');
+// Backing stores match the on-screen size in device pixels so bricks and text stay crisp at any scale.
+function fit(){const r=cv.getBoundingClientRect(),d=globalThis.devicePixelRatio||1,w=Math.round(r.width*d)||W,h=Math.round(r.height*d)||H;for(const[c,x]of[[cv,ctx],[bg,bctx]]){c.width=w;c.height=h;x.setTransform(w/W,0,0,h/H,0,0)}}
+fit();
 function paint(i){
   const x=GX+i%COLS*P,y=GY+(i/COLS|0)*P,hp=grid[i];
   bctx.clearRect(x,y,P,P);
@@ -186,7 +196,8 @@ function music(){
   if(muted||!ac)return;
   while(nextNote<ac.currentTime+.1){const t=Math.max(nextNote,ac.currentTime),f=110*2**(BASS[step]/12),a=f*2**(ARP[step]/12);tone(f,f,.12,'square',.03,t);tone(a,a,.08,'triangle',.02,t);nextNote=t+.125;step=(step+1)%16}
 }
-function toggleMute(){muted=!muted;localStorage.bb_mute=muted?'1':'0'}
+function toggleMute(){muted=!muted;localStorage.bb_mute=muted?'1':'0';muteBtn.textContent=muted?'♪ off':'♪ on'}
+muteBtn.textContent=muted?'♪ off':'♪ on';
 
 // Circle vs rect. Returns the contact normal only if the ball is moving into the rect.
 function hit(b,x,y,w,h){
@@ -213,7 +224,7 @@ function collide(b){
     grid[i]--;paint(i);
     if(grid[i]>0)sfx(grid[i]===Infinity?'steel':'hit');
     else{
-      combo++;sfx('break');left--;score+=10;
+      combo++;sfx('break');haptic();left--;score+=10;
       for(let k=0;k<6;k++)parts.push({x:x+2,y:y+2,vx:(Math.random()-.5)*200,vy:(Math.random()-.8)*200,t:.5});
       if(Math.random()<.04)pows.push({x:x+2,y:y+2,t:PK[Math.random()*PK.length|0]});
     }
@@ -232,7 +243,7 @@ function update(dt){
     for(const b of balls){const n=Math.ceil(speed*dt/3);for(let i=0;i<n;i++){b.x+=b.vx*dt/n;b.y+=b.vy*dt/n;collide(b)}}
     balls=balls.filter(b=>b.y<H+b.r);
     if(!balls.length){lives--;sfx('lose');if(lives<=0)state='over';else resetBall()}
-    else if(!left){state='win';stars[level]=Math.max(stars[level]||0,Math.min(3,lives));localStorage.bb_stars=JSON.stringify(stars);sfx('win')}
+    else if(!left){state='win';const s=Math.min(3,lives);stars[level]=Math.max(stars[level]||0,s);best[level]=Math.max(best[level]||0,score);localStorage.bb_stars=JSON.stringify(stars);localStorage.bb_best=JSON.stringify(best);native({type:'level',level,stars:s,score});sfx('win')}
     for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;sfx(POWERS[p.t][0]==='#f80'?'bad':'power')}}
     pows=pows.filter(p=>p.y<H);
   }
@@ -249,13 +260,12 @@ function drawMenu(){
     ctx.fillStyle=ok?'#fff':'#444';ctx.font='11px monospace';ctx.fillText(i+1,x+15,y+11);
     if(stars[i]){ctx.fillStyle='#fd3';ctx.font='8px serif';ctx.fillText('★'.repeat(stars[i]),x+15,y+23)}
   }
-  ctx.fillStyle='#888';ctx.font='10px monospace';ctx.fillText('tap a level · top bar returns here · M mutes',W/2,H-20);
-  drawMute();
+  ctx.fillStyle='#888';ctx.font='10px monospace';ctx.fillText('tap a level · top bar returns here · M mutes',W/2,H-36);
 }
-function drawMute(){ctx.textAlign='left';ctx.textBaseline='middle';ctx.font='12px monospace';ctx.fillStyle=muted?'#555':'#aaa';ctx.fillText(muted?'♪ off':'♪ on',6,H-12)}
 function draw(){
+  statsBtn.hidden=!(inApp()&&state==='menu');
   if(state==='menu')return drawMenu();
-  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(bg,0,0);
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(bg,0,0,W,H);
   ctx.fillStyle='#f27b55';ctx.fillRect(pad.x,pad.y,pad.w,pad.h);
   ctx.fillStyle=fx.fire>0?'#f63':'#fff';
   for(const b of balls){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fill()}
@@ -275,10 +285,9 @@ function draw(){
       ctx.fillText('Congratulations',W/2,H/2-60);ctx.fillText('You win!',W/2,H/2-30);
       ctx.font='44px serif';const s=Math.min(3,lives);
       for(let i=0;i<3;i++){ctx.fillStyle=i<s?'#fd3':'#444';ctx.fillText('★',W/2+(i-1)*48,H/2+30)}
-      ctx.fillStyle='#fff';ctx.font='14px monospace';ctx.fillText(level+1<LEVELS.length?'Tap for next level':'All levels done!',W/2,H/2+80);
+      ctx.fillStyle='#fff';ctx.font='14px monospace';ctx.fillText('SCORE '+score+'   BEST '+(best[level]||0),W/2,H/2+70);ctx.fillText(level+1<LEVELS.length?'Tap for next level':'All levels done!',W/2,H/2+95);
     }
   }
-  drawMute();
 }
 
 function tap(){
@@ -290,13 +299,14 @@ const toXY=e=>{const r=cv.getBoundingClientRect(),k=W/r.width;return[(e.clientX-
 addEventListener('pointermove',e=>{pad.x=toXY(e)[0]-pad.w/2});
 cv.addEventListener('pointerdown',e=>{
   const[x,y]=toXY(e);
-  if(x<50&&y>H-24){toggleMute();return}
   if(state==='menu'){const i=((y-70)/32|0)*10+((x-10)/32|0);if(x>=10&&x<330&&y>=70&&y<390&&unlocked(i)){level=i;loadLevel()}return}
   if(y<22&&state!=='play'){state='menu';return}
   pad.x=x-pad.w/2;tap();
 });
 addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')state='menu';if(e.key==='m')toggleMute()});
 addEventListener('keyup',e=>{keys[e.key]=0});
+muteBtn.onclick=toggleMute;statsBtn.onclick=()=>native({type:'stats'});
+addEventListener('resize',()=>{fit();for(let i=0;i<grid.length;i++)paint(i)});
 
 let last=0;
 function loop(t){const dt=Math.min((t-last)/1000,1/30);last=t;update(dt);draw();requestAnimationFrame(loop)}
