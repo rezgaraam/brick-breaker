@@ -318,7 +318,6 @@ function goMenu(){
 }
 const GO={ready:'Launch',win:'Next level',over:'Retry'},goBtn=$('go');
 function draw(){
-  wrap.style.visibility=dlg.open?'hidden':''; // nothing half-visible behind the modal settings dialog
   const g=cfg.assist&&GO[state]||'';goBtn.hidden=!g;if(g&&goBtn.textContent!==g)goBtn.textContent=g;
   menuEl.hidden=state!=='menu';homeBtn.hidden=state==='menu';
   statsBtn.hidden=!(inApp()&&state==='menu');
@@ -371,7 +370,9 @@ addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Es
 addEventListener('keyup',e=>{keys[e.key]=0});
 muteBtn.onclick=toggleMute;homeBtn.onclick=goMenu;goBtn.onclick=()=>tap();statsBtn.onclick=()=>native({type:'stats'});
 // Settings dialog: toggles persist in localStorage; reset clears progress (through the shell on iOS).
-document.getElementById('settings').onclick=()=>dlg.showModal();
+// Nothing half-visible behind the modal dialog; tied to its own open/close, not to the (possibly stopped) loop.
+document.getElementById('settings').onclick=()=>{dlg.showModal();wrap.style.visibility='hidden'};
+dlg.onclose=()=>{wrap.style.visibility=''};
 // Each setting is one full-width 44px button: role=switch for on/off, a cycling button for the paddle mode.
 const PADS={0:'Follow finger',1:'Drag 1x',1.5:'Drag 1.5x',2:'Drag 2x'},saveCfg=()=>{localStorage.bb_cfg=JSON.stringify(cfg)};
 $('opts').append(...[['music','Music'],['sfx','Sound effects'],['haptics','Haptics'],['shake','Screen shake'],['paddle','Paddle'],['assist','Assisted play']]
