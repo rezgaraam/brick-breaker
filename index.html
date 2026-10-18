@@ -154,8 +154,32 @@ function setSpeed(s){speed=s;for(const b of balls){const k=s/(Math.hypot(b.vx,b.
 // Never let a ball go near-horizontal.
 function clampAngle(b){const s=Math.hypot(b.vx,b.vy),m=.3*s;if(Math.abs(b.vy)<m){b.vy=(Math.sign(b.vy)||-1)*m;b.vx=Math.sign(b.vx||1)*Math.sqrt(s*s-m*m)}return b}
 
-let ac;
-function beep(f,d=.06,type='square'){try{ac??=new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(.06,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch{}}
+// ---- Sound: synthesized with WebAudio, no asset files. The context is created on the first tap. ----
+let ac,muted=localStorage.bb_mute==='1',lastSfx=0,combo=0;
+function tone(f0,f1,d,type='square',g0=.06,t=ac.currentTime){const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);g.gain.setValueAtTime(g0,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d)}
+function noise(d,g0=.08){const n=ac.sampleRate*d|0,buf=ac.createBuffer(1,n,ac.sampleRate),a=buf.getChannelData(0);for(let i=0;i<n;i++)a[i]=Math.random()*2-1;const s=ac.createBufferSource(),g=ac.createGain(),t=ac.currentTime;s.buffer=buf;g.gain.setValueAtTime(g0,t);g.gain.exponentialRampToValueAtTime(.001,t+d);s.connect(g).connect(ac.destination);s.start(t)}
+const SFX={
+  paddle:()=>tone(300,200,.08),
+  hit:()=>tone(500,450,.05),
+  steel:()=>tone(200,150,.05,'sawtooth',.04),
+  break:()=>{const k=1.06**Math.min(combo,24);tone(600*k,900*k,.07);noise(.05)}, // pitch climbs with the combo
+  power:()=>tone(500,1000,.15,'triangle',.1),
+  bad:()=>tone(400,120,.25,'sawtooth',.08),
+  lose:()=>tone(200,60,.5,'sawtooth',.1),
+  win:()=>[523,659,784,1047].forEach((f,i)=>tone(f,f,.25,'triangle',.1,ac.currentTime+i*.12)),
+};
+function sfx(k){
+  if(muted)return;
+  try{ac??=new AudioContext();const now=performance.now();if(k==='hit'||k==='break'||k==='steel'){if(now-lastSfx<30)return;lastSfx=now}SFX[k]()}catch{}
+}
+// Music: 16-step bass + arp, scheduled 100ms ahead of the audio clock from the game loop.
+const BASS=[0,0,7,0,5,0,7,10,0,0,7,0,3,0,5,7],ARP=[12,15,19,24,15,19,24,27,12,15,19,22,15,19,22,27];
+let nextNote=0,step=0;
+function music(){
+  if(muted||!ac)return;
+  while(nextNote<ac.currentTime+.1){const t=Math.max(nextNote,ac.currentTime),f=110*2**(BASS[step]/12),a=f*2**(ARP[step]/12);tone(f,f,.12,'square',.03,t);tone(a,a,.08,'triangle',.02,t);nextNote=t+.125;step=(step+1)%16}
+}
+function toggleMute(){muted=!muted;localStorage.bb_mute=muted?'1':'0'}
 
 // Circle vs rect. Returns the contact normal only if the ball is moving into the rect.
 function hit(b,x,y,w,h){
@@ -171,7 +195,7 @@ function collide(b){
   if(b.vy>0&&b.y+b.r>=pad.y&&b.y<pad.y+pad.h&&b.x>pad.x-b.r&&b.x<pad.x+pad.w+b.r){
     const rel=Math.max(-1,Math.min(1,(b.x-pad.x-pad.w/2)/(pad.w/2)));
     const a=(rel<0?-1:1)*Math.max(.07,Math.abs(rel))*Math.PI/3; // 4°..60° off vertical, never dead straight
-    b.y=pad.y-b.r;b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);beep(300);
+    b.y=pad.y-b.r;b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);combo=0;sfx('paddle');
   }
   // Only the grid cells under the ball's bounding box can be touching it.
   const c0=Math.max(0,(b.x-b.r-GX)/P|0),c1=Math.min(COLS-1,(b.x+b.r-GX)/P|0),r0=Math.max(0,(b.y-b.r-GY)/P|0),r1=Math.min(ROWS-1,(b.y+b.r-GY)/P|0);
@@ -179,9 +203,10 @@ function collide(b){
     const i=r*COLS+c;if(!(grid[i]>0))continue;
     const x=GX+c*P,y=GY+r*P,n=hit(b,x,y,P-1,P-1);if(!n)continue;
     if(!(fx.fire>0&&grid[i]<Infinity))bounce(b,n);
-    grid[i]--;paint(i);beep(grid[i]===Infinity?200:grid[i]>0?500:700);
-    if(grid[i]<=0){
-      left--;score+=10;
+    grid[i]--;paint(i);
+    if(grid[i]>0)sfx(grid[i]===Infinity?'steel':'hit');
+    else{
+      combo++;sfx('break');left--;score+=10;
       for(let k=0;k<6;k++)parts.push({x:x+2,y:y+2,vx:(Math.random()-.5)*200,vy:(Math.random()-.8)*200,t:.5});
       if(Math.random()<.04)pows.push({x:x+2,y:y+2,t:PK[Math.random()*PK.length|0]});
     }
@@ -196,11 +221,12 @@ function update(dt){
   for(const k in fx)if(fx[k]>0&&(fx[k]-=dt)<=0){if(k==='pad')pad.w=PAD_W;if(k==='speed')setSpeed(base)}
   if(state==='ready'){balls[0].x=pad.x+pad.w/2;balls[0].y=pad.y-5}
   if(state==='play'){
+    music();
     for(const b of balls){const n=Math.ceil(speed*dt/3);for(let i=0;i<n;i++){b.x+=b.vx*dt/n;b.y+=b.vy*dt/n;collide(b)}}
     balls=balls.filter(b=>b.y<H+b.r);
-    if(!balls.length){lives--;beep(120,.3,'sawtooth');if(lives<=0)state='over';else resetBall()}
-    else if(!left){state='win';stars[level]=Math.max(stars[level]||0,Math.min(3,lives));localStorage.bb_stars=JSON.stringify(stars);beep(880,.4)}
-    for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;beep(660,.1)}}
+    if(!balls.length){lives--;sfx('lose');if(lives<=0)state='over';else resetBall()}
+    else if(!left){state='win';stars[level]=Math.max(stars[level]||0,Math.min(3,lives));localStorage.bb_stars=JSON.stringify(stars);sfx('win')}
+    for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;sfx(POWERS[p.t][0]==='#f80'?'bad':'power')}}
     pows=pows.filter(p=>p.y<H);
   }
   for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=500*dt;p.t-=dt}
@@ -216,8 +242,10 @@ function drawMenu(){
     ctx.fillStyle=ok?'#fff':'#444';ctx.font='11px monospace';ctx.fillText(i+1,x+15,y+11);
     if(stars[i]){ctx.fillStyle='#fd3';ctx.font='8px serif';ctx.fillText('★'.repeat(stars[i]),x+15,y+23)}
   }
-  ctx.fillStyle='#888';ctx.font='10px monospace';ctx.fillText('tap a level · tap the top bar to come back',W/2,H-20);
+  ctx.fillStyle='#888';ctx.font='10px monospace';ctx.fillText('tap a level · top bar returns here · M mutes',W/2,H-20);
+  drawMute();
 }
+function drawMute(){ctx.textAlign='left';ctx.textBaseline='middle';ctx.font='12px monospace';ctx.fillStyle=muted?'#555':'#aaa';ctx.fillText(muted?'♪ off':'♪ on',6,H-12)}
 function draw(){
   if(state==='menu')return drawMenu();
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(bg,0,0);
@@ -243,10 +271,11 @@ function draw(){
       ctx.fillStyle='#fff';ctx.font='14px monospace';ctx.fillText(level+1<LEVELS.length?'Tap for next level':'All levels done!',W/2,H/2+80);
     }
   }
+  drawMute();
 }
 
 function tap(){
-  if(state==='ready'){const a=(.2+Math.random()*.4)*(Math.random()<.5?-1:1),b=balls[0];b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);state='play';beep(440)}
+  if(state==='ready'){const a=(.2+Math.random()*.4)*(Math.random()<.5?-1:1),b=balls[0];b.vx=speed*Math.sin(a);b.vy=-speed*Math.cos(a);state='play';sfx('paddle')}
   else if(state==='win'){if(level+1<LEVELS.length){level++;loadLevel()}else state='menu'}
   else if(state==='over'){score=0;loadLevel()}
 }
@@ -254,11 +283,12 @@ const toXY=e=>{const r=cv.getBoundingClientRect(),k=W/r.width;return[(e.clientX-
 addEventListener('pointermove',e=>{pad.x=toXY(e)[0]-pad.w/2});
 cv.addEventListener('pointerdown',e=>{
   const[x,y]=toXY(e);
+  if(x<50&&y>H-24){toggleMute();return}
   if(state==='menu'){const i=((y-70)/32|0)*10+((x-10)/32|0);if(x>=10&&x<330&&y>=70&&y<390&&unlocked(i)){level=i;loadLevel()}return}
   if(y<22&&state!=='play'){state='menu';return}
   pad.x=x-pad.w/2;tap();
 });
-addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')state='menu'});
+addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' ')tap();if(e.key==='Escape'&&state!=='play')state='menu';if(e.key==='m')toggleMute()});
 addEventListener('keyup',e=>{keys[e.key]=0});
 
 let last=0;

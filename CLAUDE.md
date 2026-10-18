@@ -26,8 +26,10 @@ $BIN --headless --disable-gpu --hide-scrollbars --window-size=340,600 --virtual-
 ## Architecture (all in index.html, read top to bottom)
 
 - **Levels** are arrays of 56-char strings: `.` empty, `1` green, `2` two-hit, `#` steel (hp `Infinity`).
-  `field(rows, canals)` generates the sealed-frame levels; `scale()` blows 14-column hand-drawn maps up 4x.
-  Adding a level = adding an entry to `LEVELS`; `test.js` validates every entry automatically.
+  All 100 are generated at load, deterministically from the index: `diff(i)` gives rows / two-hit share /
+  canal width, `TEMPLATES[i % 5]` builds the map from a seeded `rng(i+1)`, every 12th level is a
+  hand-drawn map from `SET` scaled 4x. Changing a template or `diff` changes every level that uses it,
+  so re-run `node test.js` (it validates all 100) and render a few.
 - **Grid state** is a flat array `grid[r*COLS+c]` of hp numbers (0 empty). `left` counts breakable bricks
   and drives the win check, so anything that removes a brick must decrement it.
 - **Bricks are drawn once** onto the offscreen canvas `bg`; `paint(i)` repaints a single cell. Every
@@ -36,10 +38,16 @@ $BIN --headless --disable-gpu --hide-scrollbars --window-size=340,600 --virtual-
   bounding box. `hit()` returns a contact normal only when the ball is moving *into* the rect, and
   `bounce()` sets the sign of a velocity component rather than negating it, so a second overlap on the
   next substep is a no-op instead of a double bounce.
-- **Game state** is a string: `ready` (ball riding the paddle) -> `play` -> `win` | `over`; `tap()`
-  advances it. Timed effects live in `fx` (seconds left) and reset in `update()`.
+- **Game state** is a string: `menu` (level select) -> `ready` (ball riding the paddle) -> `play` ->
+  `win` | `over`; `tap()` advances it, the top bar / Escape returns to `menu`. Timed effects live in
+  `fx` (seconds left) and reset in `update()`. Ball speed is `base` = `SPEED` + level.
 - **Power-ups** are the `POWERS` table: label -> `[pill color, effect fn]`. Add one by adding a row.
-- Progress is `localStorage.bb_level` only.
+- **Sound** is all synthesized: `SFX` table of `tone()`/`noise()` calls, `sfx(k)` guards mute, creates
+  the `AudioContext` on first use and throttles brick sounds to one per 30ms. `music()` schedules a
+  16-step pattern 100ms ahead of the audio clock from `update()`. Everything audio is inside try/catch so
+  headless runs (no `AudioContext`) stay silent.
+- Persistence: `localStorage.bb_stars` (JSON `{levelIndex: stars}`, level i unlocks when i-1 has a
+  star) and `localStorage.bb_mute`.
 
 ## Invariants the geometry depends on
 
