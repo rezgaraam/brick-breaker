@@ -37,6 +37,8 @@ function field(rows,canals){
   for(const[c0,w,h]of canals)for(let r=rows-h;r<rows;r++)for(let c=c0-2;c<c0+w+2;c++)g[r][c]=c<c0||c>=c0+w?'#':'.';
   return join(g);
 }
+// Carve a steel room (cols 14-41, rows 4..R/3-ish) into a brick grid, door at the bottom centre.
+const room=(g,R)=>{const b=R-(R/3|0)-3;for(let r=4;r<b;r++)for(let c=14;c<42;c++)if(r<6||r>=b-2||c<16||c>=40)g[r][c]=r>=b-2&&c>=26&&c<30?'.':'#';return g};
 const TEMPLATES=[
   // 1-3 canals, more as levels go up, random heights
   (i,R,d)=>{const n=1+(i/35|0),w=d.canal,slot=COLS/n;return field(R,Array.from({length:n},(_,k)=>[Math.min(COLS-6-w,Math.max(6,Math.round(slot*k+slot/2-w/2+(d.r()-.5)*6))),w,8+(d.r()*(R-16)|0)]))}, // keep >=2 brick columns between a wall and the frame
@@ -45,7 +47,7 @@ const TEMPLATES=[
   // brick bands separated by staggered steel rows with gaps
   (i,R,d)=>{const off=d.r()<.5?0:4;return make(R,(r,c)=>r%8===7?((c+off+(r/8|0)*4)%8<4?'#':'.'):'1')},
   // a canal field with an inner steel room whose only door is at its bottom
-  (i,R,d)=>{const g=cells(field(R,[[26,d.canal,R/3|0]])),b=R-(R/3|0)-3;for(let r=4;r<b;r++)for(let c=14;c<42;c++)if(r<6||r>=b-2||c<16||c>=40)g[r][c]=r>=b-2&&c>=26&&c<30?'.':'#';return join(g)},
+  (i,R,d)=>join(room(cells(field(R,[[26,d.canal,R/3|0]])),R)),
   // diamond with a two-hit core
   (i,R,d)=>make(R,(r,c)=>{const k=Math.abs(c-27.5)/27.5+Math.abs(r-(R-1)/2)/((R-1)/2);return k>1?'.':k>.5?'1':'2'}),
 ];
@@ -123,7 +125,8 @@ const SET=[`
 ${'11111111111111\n'.repeat(14)}22222222222222`].map(scale);
 const diff=i=>({rows:28+(36*i/99|0),two:.4*i/99,canal:i<30?4:3,r:rng(i+1)});
 const LEVELS=Array.from({length:100},(_,i)=>{
-  const d=diff(i),m=i%12===11?SET[(i/12|0)%SET.length]:TEMPLATES[i%TEMPLATES.length](i,d.rows,d);
+  const d=diff(i),m=i===99?join(room(cells(field(64,[[7,3,20],[27,3,14],[46,3,26]])),64)) // finale: tallest field, three canals, inner room
+    :i%12===11?SET[(i/12|0)%SET.length]:TEMPLATES[i%TEMPLATES.length](i,d.rows,d);
   return m.map(row=>[...row].map(ch=>ch==='1'&&d.r()<d.two?'2':ch).join(''));
 });
 
@@ -138,7 +141,7 @@ const POWERS={
   N:['#f80',()=>{pad.w=40;fx.pad=8}],
   '>>':['#f80',()=>{setSpeed(380);fx.speed=8}],
 },PK=Object.keys(POWERS);
-function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
+function split(b,n){const a0=Math.atan2(b.vy,b.vx);for(let i=0;i<n&&balls.length<MAX_BALLS;i++){const a=a0+(i-(n-1)/2||.5)*.4;balls.push(clampAngle({...b,trail:[],vx:Math.cos(a)*speed,vy:Math.sin(a)*speed}))}}
 
 let stars=JSON.parse(localStorage.bb_stars||'{}'),best=JSON.parse(localStorage.bb_best||'{}'),level=0,score=0,lives=3,base=SPEED,speed=SPEED,state='menu';
 const unlocked=i=>i===0||stars[i-1]>0;
@@ -165,7 +168,7 @@ function loadLevel(){
 }
 function resetBall(){
   pows=[];pad.w=PAD_W;fx={pad:0,speed:0,fire:0};speed=base;
-  balls=[{x:pad.x+pad.w/2,y:pad.y-5,r:4,vx:0,vy:0}];state='ready';
+  balls=[{x:pad.x+pad.w/2,y:pad.y-5,r:4,vx:0,vy:0,trail:[]}];state='ready';
 }
 function setSpeed(s){speed=s;for(const b of balls){const k=s/(Math.hypot(b.vx,b.vy)||1);b.vx*=k;b.vy*=k}}
 // Never let a ball go near-horizontal.
@@ -173,6 +176,9 @@ function clampAngle(b){const s=Math.hypot(b.vx,b.vy),m=.3*s;if(Math.abs(b.vy)<m)
 
 // ---- Sound: synthesized with WebAudio, no asset files. The context is created on the first tap. ----
 let ac,muted=localStorage.bb_mute==='1',lastSfx=0,combo=0;
+// Screen shake: jolt() adds, update() decays. Off when the OS asks for reduced motion.
+let shake=0;const calm=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+function jolt(n){if(!calm)shake=Math.min(8,shake+n)}
 function tone(f0,f1,d,type='square',g0=.06,t=ac.currentTime){const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);g.gain.setValueAtTime(g0,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d)}
 function noise(d,g0=.08){const n=ac.sampleRate*d|0,buf=ac.createBuffer(1,n,ac.sampleRate),a=buf.getChannelData(0);for(let i=0;i<n;i++)a[i]=Math.random()*2-1;const s=ac.createBufferSource(),g=ac.createGain(),t=ac.currentTime;s.buffer=buf;g.gain.setValueAtTime(g0,t);g.gain.exponentialRampToValueAtTime(.001,t+d);s.connect(g).connect(ac.destination);s.start(t)}
 const SFX={
@@ -224,7 +230,7 @@ function collide(b){
     grid[i]--;paint(i);
     if(grid[i]>0)sfx(grid[i]===Infinity?'steel':'hit');
     else{
-      combo++;sfx('break');haptic();left--;score+=10;
+      combo++;sfx('break');haptic();jolt(1);left--;score+=10+combo; // combo = bricks since the last paddle hit
       for(let k=0;k<6;k++)parts.push({x:x+2,y:y+2,vx:(Math.random()-.5)*200,vy:(Math.random()-.8)*200,t:.5});
       if(Math.random()<.04)pows.push({x:x+2,y:y+2,t:PK[Math.random()*PK.length|0]});
     }
@@ -234,17 +240,18 @@ function collide(b){
 
 function update(dt){
   if(state==='menu')return;
+  shake=Math.max(0,shake-dt*30);
   pad.x+=((keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0))*400*dt;
   pad.x=Math.max(0,Math.min(W-pad.w,pad.x));
   for(const k in fx)if(fx[k]>0&&(fx[k]-=dt)<=0){if(k==='pad')pad.w=PAD_W;if(k==='speed')setSpeed(base)}
   if(state==='ready'){balls[0].x=pad.x+pad.w/2;balls[0].y=pad.y-5}
   if(state==='play'){
     music();
-    for(const b of balls){const n=Math.ceil(speed*dt/3);for(let i=0;i<n;i++){b.x+=b.vx*dt/n;b.y+=b.vy*dt/n;collide(b)}}
+    for(const b of balls){b.trail.push({x:b.x,y:b.y});if(b.trail.length>8)b.trail.shift();const n=Math.ceil(speed*dt/3);for(let i=0;i<n;i++){b.x+=b.vx*dt/n;b.y+=b.vy*dt/n;collide(b)}}
     balls=balls.filter(b=>b.y<H+b.r);
-    if(!balls.length){lives--;sfx('lose');if(lives<=0)state='over';else resetBall()}
+    if(!balls.length){lives--;sfx('lose');jolt(8);if(lives<=0)state='over';else resetBall()}
     else if(!left){state='win';const s=Math.min(3,lives);stars[level]=Math.max(stars[level]||0,s);best[level]=Math.max(best[level]||0,score);localStorage.bb_stars=JSON.stringify(stars);localStorage.bb_best=JSON.stringify(best);native({type:'level',level,stars:s,score});sfx('win')}
-    for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;sfx(POWERS[p.t][0]==='#f80'?'bad':'power')}}
+    for(const p of pows){p.y+=90*dt;if(p.y+9>=pad.y&&p.y-9<=pad.y+pad.h&&p.x>pad.x-9&&p.x<pad.x+pad.w+9){POWERS[p.t][1]();p.y=H+99;jolt(2);sfx(POWERS[p.t][0]==='#f80'?'bad':'power')}}
     pows=pows.filter(p=>p.y<H);
   }
   for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=500*dt;p.t-=dt}
@@ -265,9 +272,13 @@ function drawMenu(){
 function draw(){
   statsBtn.hidden=!(inApp()&&state==='menu');
   if(state==='menu')return drawMenu();
-  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(bg,0,0,W,H);
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  ctx.save();if(shake>0)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
+  ctx.drawImage(bg,0,0,W,H);
   ctx.fillStyle='#f27b55';ctx.fillRect(pad.x,pad.y,pad.w,pad.h);
   ctx.fillStyle=fx.fire>0?'#f63':'#fff';
+  for(const b of balls)b.trail.forEach((t,i)=>{ctx.globalAlpha=(i+1)/b.trail.length*.35;ctx.beginPath();ctx.arc(t.x,t.y,b.r*(i+1)/b.trail.length,0,7);ctx.fill()});
+  ctx.globalAlpha=1;
   for(const b of balls){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fill()}
   ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 9px monospace';
   for(const p of pows){ctx.fillStyle=POWERS[p.t][0];ctx.beginPath();ctx.arc(p.x,p.y,9,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.fillText(p.t,p.x,p.y+1)}
@@ -276,6 +287,7 @@ function draw(){
   ctx.textAlign='left';ctx.fillText('SCORE '+score,6,11);
   ctx.textAlign='center';ctx.fillText('LEVEL '+(level+1),W/2,11);
   ctx.textAlign='right';ctx.fillText('♥'.repeat(lives),W-6,11);
+  if(combo>=5&&state==='play'){ctx.textAlign='center';ctx.font='bold 16px monospace';ctx.fillStyle='#fd3';ctx.fillText('COMBO x'+combo,W/2,440)}
   ctx.textAlign='center';ctx.font='bold 22px monospace';
   if(state==='ready'){ctx.fillStyle='#fff';ctx.fillText('TAP TO LAUNCH',W/2,H-110)}
   else if(state!=='play'){
@@ -288,6 +300,7 @@ function draw(){
       ctx.fillStyle='#fff';ctx.font='14px monospace';ctx.fillText('SCORE '+score+'   BEST '+(best[level]||0),W/2,H/2+70);ctx.fillText(level+1<LEVELS.length?'Tap for next level':'All levels done!',W/2,H/2+95);
     }
   }
+  ctx.restore();
 }
 
 function tap(){
